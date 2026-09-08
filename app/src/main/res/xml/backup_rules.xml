@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!-- Asset JSON + baselines are the user's data; safe to back up. -->
+    <include domain="file" path="assets/" />
+    <!-- Never back up cached model files or rendered reports. -->
+    <exclude domain="file" path="models/" />
+    <exclude domain="cache" path="." />
+</full-backup-content>

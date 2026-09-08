@@ -1,0 +1,21 @@
+*.iml
+.gradle/
+.idea/
+build/
+/local.properties
+/captures
+.externalNativeBuild
+.cxx
+*.apk
+*.aab
+
+# On-device model artifacts are large binaries — keep them out of git.
+# Place them under app/src/main/assets/models/ locally (see ml/README.md).
+app/src/main/assets/models/*.pte
+app/src/main/assets/models/*.task
+app/src/main/assets/models/*.bin
+ml/.venv/
+ml/out/
+ml/data/
+__pycache__/
+*.pyc

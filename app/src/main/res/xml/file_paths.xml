@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Rendered "Share Report" PNGs live here before being handed to the share sheet. -->
+    <cache-path name="reports" path="reports/" />
+    <files-path name="asset_photos" path="assets/" />
+</paths>
