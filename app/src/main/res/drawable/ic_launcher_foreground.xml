@@ -1,0 +1,17 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Stylised "machine heartbeat" waveform inside the safe zone (24..84). -->
+    <path
+        android:strokeColor="#22D3EE"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000"
+        android:pathData="M28,54 L40,54 L46,36 L54,72 L62,44 L68,54 L80,54" />
+    <path
+        android:fillColor="#134E4A"
+        android:pathData="M54,26 m-3,0 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0" />
+</vector>

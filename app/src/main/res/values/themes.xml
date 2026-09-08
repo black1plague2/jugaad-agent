@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Compose owns the real theming (ui/theme/Theme.kt). This XML theme only
+         controls the very first frame / splash so it does not flash white. -->
+    <style name="Theme.JugaadAgent" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/jugaad_bg</item>
+        <item name="android:statusBarColor">@color/jugaad_bg</item>
+        <item name="android:navigationBarColor">@color/jugaad_bg</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>
