@@ -10,4 +10,8 @@ data class Asset(
     val hasBaseline: Boolean = false,
     val thresholds: com.jugaad.agent.ml.anomaly.Thresholds =
         com.jugaad.agent.ml.anomaly.Thresholds.DEFAULT,
+    /** Key into the machine catalogue (com.jugaad.agent.core.config.MachineCatalog). */
+    val machineTypeId: String = "generic",
+    /** Bench/test equipment: readings must never enter FL training, the peer sample pool, or calibration. */
+    val benchTest: Boolean = false,
 )

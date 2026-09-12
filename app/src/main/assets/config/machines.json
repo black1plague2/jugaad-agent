@@ -1,0 +1,788 @@
+{
+  "schemaVersion": 1,
+  "types": [
+    {
+      "id": "coffee_vending",
+      "label": "Coffee / tea vending machine",
+      "keywords": ["coffee", "tea", "vending", "filtra", "dispenser", "boiler"],
+      "expectedRotationHz": [0, 60],
+      "notes": "pump + boiler + mixer/whipper motor + cooling fan",
+      "faults": [
+        {
+          "id": "pump_cavitation",
+          "label": "Pump cavitation or low water",
+          "keywords": ["gurgling", "rattle", "no water", "airlock", "cavitation", "low water"],
+          "evidence": [
+            {"metric": "lowBandDelta", "op": ">", "value": 0.6, "weight": 1.0},
+            {"metric": "temporalVariability", "op": ">", "value": 0.4, "weight": 0.8},
+            {"metric": "cnnClass", "op": "==", "value": 1, "weight": 0.5}
+          ],
+          "action": "Check the water supply and inlet filter; prime the pump.",
+          "severity": "WARNING"
+        },
+        {
+          "id": "boiler_scale_buildup",
+          "label": "Boiler scale buildup",
+          "keywords": ["scale", "hissing", "slow heating", "gurgling", "kettle noise"],
+          "evidence": [
+            {"metric": "highBandDelta", "op": ">", "value": 0.4, "weight": 0.8},
+            {"metric": "lineHumDelta", "op": ">", "value": 0.15, "weight": 0.5},
+            {"metric": "temporalVariability", "op": ">", "value": 0.3, "weight": 0.6}
+          ],
+          "action": "Descale the boiler and check the heating element for scale buildup.",
+          "severity": "WARNING"
+        },
+        {
+          "id": "mixer_motor_bearing_wear",
+          "label": "Mixer / whipper motor bearing wear",
+          "keywords": ["whine", "squeal", "grinding", "bearing", "whipper"],
+          "evidence": [
+            {"metric": "veryHighBandDelta", "op": ">", "value": 0.6, "weight": 1.0},
+            {"metric": "peakiness", "op": ">", "value": 0.5, "weight": 0.7},
+            {"metric": "imuDelta", "op": ">", "value": 0.1, "weight": 0.6}
+          ],
+          "action": "Inspect and replace the mixer or whipper motor bearing.",
+          "severity": "CRITICAL"
+        },
+        {
+          "id": "dispenser_obstruction",
+          "label": "Dispenser or filter clogged",
+          "keywords": ["clogged", "obstruction", "no flow", "blocked", "filtra", "filter"],
+          "evidence": [
+            {"metric": "broadbandDelta", "op": ">", "value": 0.5, "weight": 0.9},
+            {"metric": "cnnClass", "op": "==", "value": 2, "weight": 0.7},
+            {"metric": "midBandDelta", "op": ">", "value": 0.3, "weight": 0.5}
+          ],
+          "action": "Clean the dispenser nozzle and filter; clear any blockage.",
+          "severity": "WARNING"
+        },
+        {
+          "id": "cooling_fan_imbalance",
+          "label": "Cooling fan imbalance or loose mounting",
+          "keywords": ["rattle", "vibration", "loose", "imbalance", "wobble"],
+          "evidence": [
+            {"metric": "lowBandDelta", "op": ">", "value": 0.4, "weight": 0.8},
+            {"metric": "imuDelta", "op": ">", "value": 0.12, "weight": 1.0},
+            {"metric": "cnnClass", "op": "==", "value": 1, "weight": 0.6}
+          ],
+          "action": "Check the cooling fan blade balance and tighten mounting screws.",
+          "severity": "WARNING"
+        }
+      ]
+    },
+    {
+      "id": "desk_fan",
+      "label": "Desk / table fan",
+      "keywords": ["desk fan", "table fan", "fan", "blade", "oscillate"],
+      "expectedRotationHz": [10, 25],
+      "notes": "single motor + blade assembly, light housing",
+      "faults": [
+        {
+          "id": "blade_imbalance",
+          "label": "Blade imbalance",
+          "keywords": ["wobble", "vibration", "shake", "imbalance", "bent blade"],
+          "evidence": [
+            {"metric": "lowBandDelta", "op": ">", "value": 0.4, "weight": 0.9},
+            {"metric": "imuDelta", "op": ">", "value": 0.12, "weight": 1.0},
+            {"metric": "cnnClass", "op": "==", "value": 1, "weight": 0.6}
+          ],
+          "action": "Check the blades for dust buildup, bending, or cracks and rebalance.",
+          "severity": "WARNING"
+        },
+        {
+          "id": "bearing_whine",
+          "label": "Motor bearing wear",
+          "keywords": ["whine", "squeal", "grinding", "bearing", "dry bearing"],
+          "evidence": [
+            {"metric": "veryHighBandDelta", "op": ">", "value": 0.6, "weight": 1.0},
+            {"metric": "peakiness", "op": ">", "value": 0.5, "weight": 0.7}
+          ],
+          "action": "Lubricate or replace the motor bearing.",
+          "severity": "CRITICAL"
+        },
+        {
+          "id": "loose_mounting",
+          "label": "Loose base or motor housing",
+          "keywords": ["rattle", "loose", "clatter", "foundation", "mounting"],
+          "evidence": [
+            {"metric": "lowBandDelta", "op": ">", "value": 0.3, "weight": 0.7},
+            {"metric": "temporalVariability", "op": ">", "value": 0.3, "weight": 0.5},
+            {"metric": "imuDelta", "op": ">", "value": 0.1, "weight": 0.8}
+          ],
+          "action": "Tighten the base, motor housing screws, and oscillation joint.",
+          "severity": "WARNING"
+        },
+        {
+          "id": "airflow_obstruction",
+          "label": "Airflow obstruction / grille blocked",
+          "keywords": ["clogged", "dust", "obstruction", "weak airflow", "blocked grille"],
+          "evidence": [
+            {"metric": "broadbandDelta", "op": ">", "value": 0.4, "weight": 0.8},
+            {"metric": "cnnClass", "op": "==", "value": 2, "weight": 0.8},
+            {"metric": "highBandDelta", "op": ">", "value": 0.3, "weight": 0.4}
+          ],
+          "action": "Clean the grille and blades to clear dust buildup.",
+          "severity": "WARNING"
+        }
+      ]
+    },
+    {
+      "id": "ceiling_fan",
+      "label": "Ceiling fan",
+      "keywords": ["ceiling fan", "blade", "wobble", "downrod"],
+      "expectedRotationHz": [3, 10],
+      "notes": "motor + blades on a downrod, low RPM",
+      "faults": [
+        {
+          "id": "blade_imbalance",
+          "label": "Blade imbalance or bent blade",
+          "keywords": ["wobble", "shake", "imbalance", "bent blade"],
+          "evidence": [
+            {"metric": "lowBandDelta", "op": ">", "value": 0.4, "weight": 0.9},
+            {"metric": "imuDelta", "op": ">", "value": 0.15, "weight": 1.0},
+            {"metric": "gyroDelta", "op": ">", "value": 0.1, "weight": 0.5}
+          ],
+          "action": "Check blade angles and balance; tighten the blade screws.",
+          "severity": "WARNING"
+        },
+        {
+          "id": "loose_mounting_bracket",
+          "label": "Loose mounting bracket or downrod",
+          "keywords": ["rattle", "loose", "wobble", "downrod", "foundation", "mounting"],
+          "evidence": [
+            {"metric": "lowBandDelta", "op": ">", "value": 0.3, "weight": 0.6},
+            {"metric": "imuDelta", "op": ">", "value": 0.12, "weight": 1.0},
+            {"metric": "temporalVariability", "op": ">", "value": 0.3, "weight": 0.5}
+          ],
+          "action": "Tighten the mounting bracket and downrod coupling immediately.",
+          "severity": "CRITICAL"
+        },
+        {
+          "id": "capacitor_failing",
+          "label": "Capacitor weakening (slow start / uneven speed)",
+          "keywords": ["hum", "slow start", "surge", "capacitor", "uneven speed"],
+          "evidence": [
+            {"metric": "lineHumDelta", "op": ">", "value": 0.2, "weight": 0.9},
+            {"metric": "magDelta", "op": ">", "value": 0.1, "weight": 0.7},
+            {"metric": "temporalVariability", "op": ">", "value": 0.3, "weight": 0.4}
+          ],
+          "action": "Test and replace the fan's run capacitor.",
+          "severity": "WARNING"
+        },
+        {
+          "id": "bearing_squeal",
+          "label": "Bearing wear / dry bearing",
+          "keywords": ["squeal", "whine", "grinding", "bearing", "dry bearing"],
+          "evidence": [
+            {"metric": "veryHighBandDelta", "op": ">", "value": 0.6, "weight": 1.0},
+            {"metric": "peakiness", "op": ">", "value": 0.5, "weight": 0.7}
+          ],
+          "action": "Lubricate or replace the motor bearing.",
+          "severity": "CRITICAL"
+        }
+      ]
+    },
+    {
+      "id": "exhaust_fan",
+      "label": "Exhaust / ventilation fan",
+      "keywords": ["exhaust fan", "ventilation", "extractor", "duct"],
+      "expectedRotationHz": [15, 30],
+      "notes": "motor + impeller, often mounted in a duct or wall",
+      "faults": [
+        {
+          "id": "impeller_imbalance",
+          "label": "Impeller imbalance",
+          "keywords": ["vibration", "wobble", "imbalance", "bent blade"],
+          "evidence": [
+            {"metric": "lowBandDelta", "op": ">", "value": 0.4, "weight": 0.9},
+            {"metric": "imuDelta", "op": ">", "value": 0.12, "weight": 1.0},
+            {"metric": "cnnClass", "op": "==", "value": 1, "weight": 0.6}
+          ],
+          "action": "Clean and inspect the impeller for bent or dirty blades.",
+          "severity": "WARNING"
+        },
+        {
+          "id": "duct_obstruction",
+          "label": "Duct or grille obstruction",
+          "keywords": ["clogged", "weak airflow", "obstruction", "blocked duct", "lint"],
+          "evidence": [
+            {"metric": "broadbandDelta", "op": ">", "value": 0.5, "weight": 0.9},
+            {"metric": "cnnClass", "op": "==", "value": 2, "weight": 0.8},
+            {"metric": "highBandDelta", "op": ">", "value": 0.3, "weight": 0.4}
+          ],
+          "action": "Clear the duct and grille of lint, dust, or debris.",
+          "severity": "WARNING"
+        },
+        {
+          "id": "bearing_wear",
+          "label": "Motor bearing wear",
+          "keywords": ["whine", "squeal", "grinding", "bearing"],
+          "evidence": [
+            {"metric": "veryHighBandDelta", "op": ">", "value": 0.6, "weight": 1.0},
+            {"metric": "peakiness", "op": ">", "value": 0.5, "weight": 0.7}
+          ],
+          "action": "Lubricate or replace the motor bearing.",
+          "severity": "CRITICAL"
+        },
+        {
+          "id": "loose_mounting",
+          "label": "Loose housing or mounting bracket",
+          "keywords": ["rattle", "loose", "clatter", "mounting", "foundation"],
+          "evidence": [
+            {"metric": "lowBandDelta", "op": ">", "value": 0.3, "weight": 0.6},
+            {"metric": "temporalVariability", "op": ">", "value": 0.3, "weight": 0.5},
+            {"metric": "imuDelta", "op": ">", "value": 0.1, "weight": 0.8}
+          ],
+          "action": "Tighten the housing and mounting bracket screws.",
+          "severity": "WARNING"
+        }
+      ]
+    },
+    {
+      "id": "ac_outdoor_unit",
+      "label": "AC outdoor / condenser unit",
+      "keywords": ["ac", "air conditioner", "outdoor unit", "condenser", "compressor", "split ac"],
+      "expectedRotationHz": [25, 50],
+      "notes": "compressor + condenser fan + refrigerant lines",
+      "faults": [
+        {
+          "id": "compressor_bearing_wear",
+          "label": "Compressor bearing wear",
+          "keywords": ["grinding", "whine", "knocking", "bearing", "compressor noise"],
+          "evidence": [
+            {"metric": "veryHighBandDelta", "op": ">", "value": 0.6, "weight": 1.0},
+            {"metric": "peakiness", "op": ">", "value": 0.5, "weight": 0.6},
+            {"metric": "imuDelta", "op": ">", "value": 0.12, "weight": 0.6}
+          ],
+          "action": "Have a technician inspect the compressor bearings.",
+          "severity": "CRITICAL"
+        },
+        {
+          "id": "condenser_fan_imbalance",
+          "label": "Condenser fan imbalance",
+          "keywords": ["rattle", "vibration", "wobble", "imbalance", "fan blade"],
+          "evidence": [
+            {"metric": "lowBandDelta", "op": ">", "value": 0.4, "weight": 0.9},
+            {"metric": "imuDelta", "op": ">", "value": 0.12, "weight": 1.0},
+            {"metric": "cnnClass", "op": "==", "value": 1, "weight": 0.6}
+          ],
+          "action": "Check the condenser fan blade for damage or dirt imbalance.",
+          "severity": "WARNING"
+        },
+        {
+          "id": "refrigerant_low_or_leak",
+          "label": "Low refrigerant or leak",
+          "keywords": ["hissing", "gurgling", "refrigerant", "poor cooling", "leak"],
+          "evidence": [
+            {"metric": "highBandDelta", "op": ">", "value": 0.4, "weight": 0.8},
+            {"metric": "temporalVariability", "op": ">", "value": 0.4, "weight": 0.6},
+            {"metric": "broadbandDelta", "op": ">", "value": 0.3, "weight": 0.4}
+          ],
+          "action": "Check for refrigerant leaks and have the system recharged by a technician.",
+          "severity": "CRITICAL"
+        },
+        {
+          "id": "coil_airflow_obstruction",
+          "label": "Condenser coil obstruction",
+          "keywords": ["clogged", "dust", "dirty coil", "weak airflow", "obstruction"],
+          "evidence": [
+            {"metric": "broadbandDelta", "op": ">", "value": 0.5, "weight": 0.9},
+            {"metric": "cnnClass", "op": "==", "value": 2, "weight": 0.8}
+          ],
+          "action": "Clean the condenser coil and clear surrounding debris.",
+          "severity": "WARNING"
+        },
+        {
+          "id": "capacitor_or_winding_fault",
+          "label": "Run capacitor or motor winding fault",
+          "keywords": ["hum", "surge", "capacitor", "winding", "electrical noise", "buzzing"],
+          "evidence": [
+            {"metric": "lineHumDelta", "op": ">", "value": 0.2, "weight": 0.9},
+            {"metric": "magDelta", "op": ">", "value": 0.1, "weight": 0.7}
+          ],
+          "action": "Test the run capacitor and motor windings; replace if degraded.",
+          "severity": "CRITICAL"
+        }
+      ]
+    },
+    {
+      "id": "refrigerator_compressor",
+      "label": "Refrigerator compressor",
+      "keywords": ["refrigerator", "fridge", "compressor", "cooling"],
+      "expectedRotationHz": [40, 50],
+      "notes": "hermetic compressor + condenser fan",
+      "faults": [
+        {
+          "id": "compressor_mount_wear",
+          "label": "Compressor mounting or foundation wear",
+          "keywords": ["rattle", "vibration", "loose", "foundation", "mounting", "buzzing"],
+          "evidence": [
+            {"metric": "lowBandDelta", "op": ">", "value": 0.4, "weight": 0.9},
+            {"metric": "imuDelta", "op": ">", "value": 0.12, "weight": 1.0}
+          ],
+          "action": "Check the compressor rubber mounts and tighten the housing.",
+          "severity": "WARNING"
+        },
+        {
+          "id": "compressor_bearing_wear",
+          "label": "Compressor bearing or valve wear",
+          "keywords": ["knocking", "grinding", "whine", "bearing"],
+          "evidence": [
+            {"metric": "veryHighBandDelta", "op": ">", "value": 0.6, "weight": 1.0},
+            {"metric": "peakiness", "op": ">", "value": 0.5, "weight": 0.6},
+            {"metric": "temporalVariability", "op": ">", "value": 0.3, "weight": 0.4}
+          ],
+          "action": "Have a refrigeration technician inspect the compressor.",
+          "severity": "CRITICAL"
+        },
+        {
+          "id": "condenser_fan_obstruction",
+          "label": "Condenser fan or coil obstruction",
+          "keywords": ["clogged", "dust", "weak airflow", "obstruction", "dirty coil"],
+          "evidence": [
+            {"metric": "broadbandDelta", "op": ">", "value": 0.4, "weight": 0.8},
+            {"metric": "cnnClass", "op": "==", "value": 2, "weight": 0.8}
+          ],
+          "action": "Clean the condenser coil and fan of dust buildup.",
+          "severity": "WARNING"
+        },
+        {
+          "id": "relay_or_winding_fault",
+          "label": "Start relay or winding fault",
+          "keywords": ["clicking", "hum", "buzzing", "relay", "winding", "surge"],
+          "evidence": [
+            {"metric": "lineHumDelta", "op": ">", "value": 0.2, "weight": 0.9},
+            {"metric": "magDelta", "op": ">", "value": 0.1, "weight": 0.7}
+          ],
+          "action": "Test the start relay and compressor windings.",
+          "severity": "CRITICAL"
+        }
+      ]
+    },
+    {
+      "id": "water_pump",
+      "label": "Water pump",
+      "keywords": ["water pump", "pump", "borewell", "submersible"],
+      "expectedRotationHz": [40, 50],
+      "notes": "motor + impeller, wet end",
+      "faults": [
+        {
+          "id": "cavitation_low_water",
+          "label": "Cavitation or low water level",
+          "keywords": ["gurgling", "rattle", "no water", "low water", "airlock", "cavitation"],
+          "evidence": [
+            {"metric": "lowBandDelta", "op": ">", "value": 0.6, "weight": 1.0},
+            {"metric": "temporalVariability", "op": ">", "value": 0.4, "weight": 0.8},
+            {"metric": "cnnClass", "op": "==", "value": 1, "weight": 0.5}
+          ],
+          "action": "Check the water source level and inlet for airlock.",
+          "severity": "WARNING"
+        },
+        {
+          "id": "impeller_clog_or_wear",
+          "label": "Impeller clogged or worn",
+          "keywords": ["clogged", "obstruction", "low pressure", "worn impeller", "blocked"],
+          "evidence": [
+            {"metric": "broadbandDelta", "op": ">", "value": 0.5, "weight": 0.9},
+            {"metric": "cnnClass", "op": "==", "value": 2, "weight": 0.7}
+          ],
+          "action": "Inspect and clean the impeller; replace if worn.",
+          "severity": "WARNING"
+        },
+        {
+          "id": "bearing_wear",
+          "label": "Motor bearing wear",
+          "keywords": ["whine", "squeal", "grinding", "bearing"],
+          "evidence": [
+            {"metric": "veryHighBandDelta", "op": ">", "value": 0.6, "weight": 1.0},
+            {"metric": "peakiness", "op": ">", "value": 0.5, "weight": 0.7}
+          ],
+          "action": "Lubricate or replace the motor bearing.",
+          "severity": "CRITICAL"
+        },
+        {
+          "id": "misalignment_or_loose_coupling",
+          "label": "Shaft misalignment or loose coupling",
+          "keywords": ["knocking", "rattle", "misalignment", "loose coupling", "vibration"],
+          "evidence": [
+            {"metric": "lowBandDelta", "op": ">", "value": 0.4, "weight": 0.8},
+            {"metric": "imuDelta", "op": ">", "value": 0.15, "weight": 1.0}
+          ],
+          "action": "Check the shaft alignment and tighten the coupling.",
+          "severity": "CRITICAL"
+        },
+        {
+          "id": "capacitor_or_winding_fault",
+          "label": "Capacitor or winding fault",
+          "keywords": ["hum", "surge", "capacitor", "winding", "buzzing"],
+          "evidence": [
+            {"metric": "lineHumDelta", "op": ">", "value": 0.2, "weight": 0.9},
+            {"metric": "magDelta", "op": ">", "value": 0.1, "weight": 0.7}
+          ],
+          "action": "Test the run capacitor and motor windings.",
+          "severity": "WARNING"
+        }
+      ]
+    },
+    {
+      "id": "washing_machine",
+      "label": "Washing machine",
+      "keywords": ["washing machine", "washer", "spin", "drum"],
+      "expectedRotationHz": [0, 20],
+      "notes": "drum motor + belt/direct drive + drain pump",
+      "faults": [
+        {
+          "id": "drum_imbalance_unbalanced_load",
+          "label": "Unbalanced load / drum imbalance",
+          "keywords": ["shake", "vibration", "walking", "imbalance", "unbalanced load"],
+          "evidence": [
+            {"metric": "lowBandDelta", "op": ">", "value": 0.5, "weight": 1.0},
+            {"metric": "imuDelta", "op": ">", "value": 0.15, "weight": 1.0},
+            {"metric": "cnnClass", "op": "==", "value": 1, "weight": 0.5}
+          ],
+          "action": "Redistribute the load evenly and check the drum suspension.",
+          "severity": "WARNING"
+        },
+        {
+          "id": "drain_pump_obstruction",
+          "label": "Drain pump clogged or obstructed",
+          "keywords": ["gurgling", "no drain", "clogged", "obstruction", "drain pump"],
+          "evidence": [
+            {"metric": "broadbandDelta", "op": ">", "value": 0.4, "weight": 0.8},
+            {"metric": "temporalVariability", "op": ">", "value": 0.4, "weight": 0.6},
+            {"metric": "cnnClass", "op": "==", "value": 2, "weight": 0.5}
+          ],
+          "action": "Clean the drain pump filter and check the drain hose for blockage.",
+          "severity": "WARNING"
+        },
+        {
+          "id": "belt_wear_or_slip",
+          "label": "Drive belt worn or slipping",
+          "keywords": ["squeal", "belt", "slipping", "whine"],
+          "evidence": [
+            {"metric": "veryHighBandDelta", "op": ">", "value": 0.5, "weight": 0.9},
+            {"metric": "peakiness", "op": ">", "value": 0.4, "weight": 0.6}
+          ],
+          "action": "Inspect the drive belt for wear or slippage and replace if needed.",
+          "severity": "WARNING"
+        },
+        {
+          "id": "bearing_wear",
+          "label": "Drum or motor bearing wear",
+          "keywords": ["grinding", "rumble", "knocking", "bearing"],
+          "evidence": [
+            {"metric": "highBandDelta", "op": ">", "value": 0.5, "weight": 0.8},
+            {"metric": "peakiness", "op": ">", "value": 0.4, "weight": 0.5},
+            {"metric": "imuDelta", "op": ">", "value": 0.1, "weight": 0.5}
+          ],
+          "action": "Inspect the drum bearing and replace it if worn.",
+          "severity": "CRITICAL"
+        },
+        {
+          "id": "foundation_loose_leveling",
+          "label": "Machine not leveled / loose foundation",
+          "keywords": ["rattle", "loose", "foundation", "wobble", "leveling"],
+          "evidence": [
+            {"metric": "lowBandDelta", "op": ">", "value": 0.3, "weight": 0.6},
+            {"metric": "imuDelta", "op": ">", "value": 0.12, "weight": 0.9}
+          ],
+          "action": "Level the machine and check its feet and foundation.",
+          "severity": "WARNING"
+        }
+      ]
+    },
+    {
+      "id": "air_compressor",
+      "label": "Air compressor",
+      "keywords": ["air compressor", "compressor", "pneumatic", "receiver tank"],
+      "expectedRotationHz": [20, 50],
+      "notes": "motor + piston/rotary pump + receiver tank",
+      "faults": [
+        {
+          "id": "valve_or_piston_knock",
+          "label": "Valve or piston knocking",
+          "keywords": ["knocking", "banging", "rattle", "piston", "valve"],
+          "evidence": [
+            {"metric": "lowBandDelta", "op": ">", "value": 0.5, "weight": 0.9},
+            {"metric": "temporalVariability", "op": ">", "value": 0.4, "weight": 0.6},
+            {"metric": "cnnClass", "op": "==", "value": 1, "weight": 0.5}
+          ],
+          "action": "Inspect the intake/discharge valves and piston assembly.",
+          "severity": "CRITICAL"
+        },
+        {
+          "id": "air_leak_hissing",
+          "label": "Air leak",
+          "keywords": ["hissing", "leak", "whistling", "air leak"],
+          "evidence": [
+            {"metric": "highBandDelta", "op": ">", "value": 0.4, "weight": 0.8},
+            {"metric": "broadbandDelta", "op": ">", "value": 0.3, "weight": 0.5}
+          ],
+          "action": "Check fittings, hoses, and the tank drain valve for leaks.",
+          "severity": "WARNING"
+        },
+        {
+          "id": "belt_wear_or_slip",
+          "label": "Drive belt worn or slipping",
+          "keywords": ["squeal", "belt", "slipping", "whine"],
+          "evidence": [
+            {"metric": "veryHighBandDelta", "op": ">", "value": 0.5, "weight": 0.9},
+            {"metric": "peakiness", "op": ">", "value": 0.4, "weight": 0.6}
+          ],
+          "action": "Inspect and tension or replace the drive belt.",
+          "severity": "WARNING"
+        },
+        {
+          "id": "bearing_wear",
+          "label": "Motor or pump bearing wear",
+          "keywords": ["whine", "grinding", "squeal", "bearing"],
+          "evidence": [
+            {"metric": "veryHighBandDelta", "op": ">", "value": 0.6, "weight": 1.0},
+            {"metric": "peakiness", "op": ">", "value": 0.5, "weight": 0.7}
+          ],
+          "action": "Lubricate or replace the motor/pump bearing.",
+          "severity": "CRITICAL"
+        },
+        {
+          "id": "intake_filter_clogged",
+          "label": "Intake filter clogged",
+          "keywords": ["clogged", "weak output", "obstruction", "filter", "reduced airflow"],
+          "evidence": [
+            {"metric": "broadbandDelta", "op": ">", "value": 0.4, "weight": 0.8},
+            {"metric": "cnnClass", "op": "==", "value": 2, "weight": 0.7}
+          ],
+          "action": "Clean or replace the intake air filter.",
+          "severity": "WARNING"
+        }
+      ]
+    },
+    {
+      "id": "diesel_generator",
+      "label": "Diesel generator",
+      "keywords": ["diesel generator", "genset", "dg set", "alternator"],
+      "expectedRotationHz": [25, 50],
+      "notes": "diesel engine + alternator, high baseline vibration",
+      "faults": [
+        {
+          "id": "engine_misfire_or_injector",
+          "label": "Engine misfire or injector fault",
+          "keywords": ["knocking", "uneven", "misfire", "rough running", "surge"],
+          "evidence": [
+            {"metric": "temporalVariability", "op": ">", "value": 0.4, "weight": 0.9},
+            {"metric": "lowBandDelta", "op": ">", "value": 0.4, "weight": 0.7},
+            {"metric": "cnnClass", "op": "==", "value": 1, "weight": 0.4}
+          ],
+          "action": "Have a technician check the injectors and fuel system for misfire.",
+          "severity": "CRITICAL"
+        },
+        {
+          "id": "alternator_bearing_wear",
+          "label": "Alternator bearing wear",
+          "keywords": ["whine", "squeal", "grinding", "bearing"],
+          "evidence": [
+            {"metric": "veryHighBandDelta", "op": ">", "value": 0.6, "weight": 1.0},
+            {"metric": "peakiness", "op": ">", "value": 0.5, "weight": 0.7}
+          ],
+          "action": "Inspect, lubricate, or replace the alternator bearing.",
+          "severity": "CRITICAL"
+        },
+        {
+          "id": "mounting_or_foundation_loose",
+          "label": "Loose engine mounting or foundation",
+          "keywords": ["rattle", "vibration", "loose", "foundation", "mounting"],
+          "evidence": [
+            {"metric": "lowBandDelta", "op": ">", "value": 0.5, "weight": 0.9},
+            {"metric": "imuDelta", "op": ">", "value": 0.15, "weight": 1.0}
+          ],
+          "action": "Check the engine mounts and foundation bolts for looseness.",
+          "severity": "WARNING"
+        },
+        {
+          "id": "cooling_fan_obstruction",
+          "label": "Radiator or cooling fan obstruction",
+          "keywords": ["clogged", "overheating", "obstruction", "weak airflow", "dust"],
+          "evidence": [
+            {"metric": "broadbandDelta", "op": ">", "value": 0.4, "weight": 0.8},
+            {"metric": "cnnClass", "op": "==", "value": 2, "weight": 0.7}
+          ],
+          "action": "Clean the radiator and cooling fan of dust and debris.",
+          "severity": "WARNING"
+        },
+        {
+          "id": "winding_or_excitation_fault",
+          "label": "Alternator winding or excitation fault",
+          "keywords": ["hum", "buzzing", "surge", "winding", "excitation", "voltage fluctuation"],
+          "evidence": [
+            {"metric": "lineHumDelta", "op": ">", "value": 0.2, "weight": 0.9},
+            {"metric": "magDelta", "op": ">", "value": 0.12, "weight": 0.7}
+          ],
+          "action": "Have the alternator windings and excitation system tested.",
+          "severity": "CRITICAL"
+        }
+      ]
+    },
+    {
+      "id": "printer_3d",
+      "label": "3D printer",
+      "keywords": ["3d printer", "printer", "extruder", "nozzle", "filament"],
+      "expectedRotationHz": [0, 10],
+      "notes": "stepper motors + belts + fans, light and precise",
+      "faults": [
+        {
+          "id": "belt_loose_or_worn",
+          "label": "Belt loose or worn (layer shifting)",
+          "keywords": ["clicking", "belt", "slipping", "loose", "layer shift"],
+          "evidence": [
+            {"metric": "highBandDelta", "op": ">", "value": 0.3, "weight": 0.7},
+            {"metric": "temporalVariability", "op": ">", "value": 0.3, "weight": 0.5}
+          ],
+          "action": "Tension or replace the drive belt; check pulley set screws.",
+          "severity": "WARNING"
+        },
+        {
+          "id": "extruder_stepper_skipping",
+          "label": "Extruder stepper motor skipping",
+          "keywords": ["clicking", "grinding", "skipping", "extruder noise", "clogged nozzle"],
+          "evidence": [
+            {"metric": "highBandDelta", "op": ">", "value": 0.4, "weight": 0.8},
+            {"metric": "cnnClass", "op": "==", "value": 2, "weight": 0.5},
+            {"metric": "temporalVariability", "op": ">", "value": 0.3, "weight": 0.4}
+          ],
+          "action": "Check for a clogged nozzle and reduce feed rate; verify stepper current.",
+          "severity": "WARNING"
+        },
+        {
+          "id": "cooling_fan_bearing_wear",
+          "label": "Cooling fan bearing wear",
+          "keywords": ["whine", "rattle", "squeal", "fan noise", "bearing"],
+          "evidence": [
+            {"metric": "veryHighBandDelta", "op": ">", "value": 0.5, "weight": 0.9},
+            {"metric": "peakiness", "op": ">", "value": 0.4, "weight": 0.6}
+          ],
+          "action": "Inspect and replace the part-cooling or hotend fan.",
+          "severity": "WARNING"
+        },
+        {
+          "id": "frame_loose_mounting",
+          "label": "Loose frame or gantry mounting",
+          "keywords": ["rattle", "loose", "vibration", "wobble", "frame"],
+          "evidence": [
+            {"metric": "lowBandDelta", "op": ">", "value": 0.3, "weight": 0.7},
+            {"metric": "imuDelta", "op": ">", "value": 0.1, "weight": 0.8}
+          ],
+          "action": "Tighten frame bolts and gantry mounting screws.",
+          "severity": "WARNING"
+        }
+      ]
+    },
+    {
+      "id": "server_rack_fan",
+      "label": "Server rack cooling fan",
+      "keywords": ["server", "rack", "cooling fan", "datacenter", "chassis fan"],
+      "expectedRotationHz": [40, 100],
+      "notes": "small high-speed fans in a sealed chassis",
+      "faults": [
+        {
+          "id": "fan_bearing_wear",
+          "label": "Fan bearing wear",
+          "keywords": ["whine", "squeal", "grinding", "bearing", "high pitch"],
+          "evidence": [
+            {"metric": "veryHighBandDelta", "op": ">", "value": 0.6, "weight": 1.0},
+            {"metric": "peakiness", "op": ">", "value": 0.5, "weight": 0.7}
+          ],
+          "action": "Replace the affected chassis fan.",
+          "severity": "CRITICAL"
+        },
+        {
+          "id": "dust_obstruction",
+          "label": "Dust obstruction / airflow blocked",
+          "keywords": ["clogged", "dust", "weak airflow", "obstruction", "overheating"],
+          "evidence": [
+            {"metric": "broadbandDelta", "op": ">", "value": 0.4, "weight": 0.8},
+            {"metric": "cnnClass", "op": "==", "value": 2, "weight": 0.8}
+          ],
+          "action": "Clean dust filters and vents; verify airflow is unobstructed.",
+          "severity": "WARNING"
+        },
+        {
+          "id": "fan_imbalance",
+          "label": "Fan blade imbalance",
+          "keywords": ["rattle", "vibration", "imbalance", "wobble"],
+          "evidence": [
+            {"metric": "lowBandDelta", "op": ">", "value": 0.3, "weight": 0.7},
+            {"metric": "imuDelta", "op": ">", "value": 0.1, "weight": 0.9},
+            {"metric": "cnnClass", "op": "==", "value": 1, "weight": 0.5}
+          ],
+          "action": "Inspect the fan blades and hub for damage or debris.",
+          "severity": "WARNING"
+        },
+        {
+          "id": "loose_mounting",
+          "label": "Loose fan mounting or chassis panel",
+          "keywords": ["rattle", "loose", "buzzing", "chassis", "mounting"],
+          "evidence": [
+            {"metric": "lowBandDelta", "op": ">", "value": 0.3, "weight": 0.6},
+            {"metric": "temporalVariability", "op": ">", "value": 0.3, "weight": 0.5}
+          ],
+          "action": "Check the fan mounting screws and chassis panel fasteners.",
+          "severity": "WARNING"
+        }
+      ]
+    },
+    {
+      "id": "generic",
+      "label": "Other rotating machine",
+      "keywords": [],
+      "expectedRotationHz": [0, 60],
+      "notes": "generic rotating-machine fallback used when no specific type fits",
+      "faults": [
+        {
+          "id": "imbalance_or_loose_mounting",
+          "label": "Imbalance or loose mounting",
+          "keywords": ["vibration", "rattle", "wobble", "imbalance", "loose", "mounting", "foundation"],
+          "evidence": [
+            {"metric": "lowBandDelta", "op": ">", "value": 0.4, "weight": 0.9},
+            {"metric": "imuDelta", "op": ">", "value": 0.12, "weight": 1.0},
+            {"metric": "cnnClass", "op": "==", "value": 1, "weight": 0.6}
+          ],
+          "action": "Check for loose mounting hardware and rotating-part imbalance.",
+          "severity": "WARNING"
+        },
+        {
+          "id": "airflow_obstruction",
+          "label": "Airflow obstruction or clogging",
+          "keywords": ["clogged", "obstruction", "dust", "blocked", "weak airflow"],
+          "evidence": [
+            {"metric": "broadbandDelta", "op": ">", "value": 0.4, "weight": 0.8},
+            {"metric": "cnnClass", "op": "==", "value": 2, "weight": 0.8},
+            {"metric": "highBandDelta", "op": ">", "value": 0.3, "weight": 0.4}
+          ],
+          "action": "Clear vents, filters, or ducts of obstruction and clean the unit.",
+          "severity": "WARNING"
+        },
+        {
+          "id": "bearing_wear",
+          "label": "Bearing wear",
+          "keywords": ["whine", "squeal", "grinding", "bearing", "knocking"],
+          "evidence": [
+            {"metric": "veryHighBandDelta", "op": ">", "value": 0.6, "weight": 1.0},
+            {"metric": "peakiness", "op": ">", "value": 0.5, "weight": 0.7}
+          ],
+          "action": "Inspect and lubricate or replace the worn bearing.",
+          "severity": "CRITICAL"
+        },
+        {
+          "id": "electrical_hum",
+          "label": "Electrical fault (winding / capacitor hum)",
+          "keywords": ["hum", "buzzing", "surge", "capacitor", "winding", "electrical noise"],
+          "evidence": [
+            {"metric": "lineHumDelta", "op": ">", "value": 0.2, "weight": 0.9},
+            {"metric": "magDelta", "op": ">", "value": 0.1, "weight": 0.7}
+          ],
+          "action": "Have the motor windings, capacitor, and electrical connections tested.",
+          "severity": "WARNING"
+        }
+      ]
+    }
+  ]
+}

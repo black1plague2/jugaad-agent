@@ -2,6 +2,7 @@ package com.jugaad.agent.ui.checklist
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.hardware.Sensor
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,19 +11,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Cancel
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.RadioButtonUnchecked
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Icon
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,19 +27,25 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.jugaad.agent.core.Constants
+import com.jugaad.agent.sensor.MotionCapture
 import com.jugaad.agent.ui.common.SectionCard
+import com.jugaad.agent.ui.common.fiori.FioriColors
+import com.jugaad.agent.ui.common.fiori.FioriObjectCell
+import com.jugaad.agent.ui.common.fiori.FioriSectionHeader
+import com.jugaad.agent.ui.common.fiori.FioriStatusLabel
+import com.jugaad.agent.ui.common.fiori.GhostButton
+import com.jugaad.agent.ui.common.fiori.PrimaryButton
+import com.jugaad.agent.ui.common.fiori.Semantic
+import com.jugaad.agent.ui.common.fiori.StatusChip
 import com.jugaad.agent.ui.services
-import com.jugaad.agent.ui.theme.Accent
-import com.jugaad.agent.ui.theme.Ink
-import com.jugaad.agent.ui.theme.StatusCritical
-import com.jugaad.agent.ui.theme.StatusHealthy
-import com.jugaad.agent.ui.theme.TextHi
-import com.jugaad.agent.ui.theme.TextMid
 import kotlinx.coroutines.launch
 
 private enum class Check { PASS, FAIL, UNKNOWN }
+
+/** One row of the Sensors section: hardware/permission availability plus the 1 s probe result. */
+private data class SensorRow(val label: String, val available: Boolean, val rateHz: Double)
 
 @Composable
 fun ChecklistScreen(
@@ -71,57 +73,125 @@ fun ChecklistScreen(
         }
     }
 
+    // Sensors section: availability up front, measured rate after a 1 s probe run once on
+    // entering this screen. The probe is a plain LaunchedEffect(Unit) coroutine, so leaving
+    // the screen before it finishes cancels it and MotionCapture unregisters its listeners.
+    val motionCapture = remember { MotionCapture(ctx.applicationContext) }
+    val accelAvailable = remember { motionCapture.isAvailable(Sensor.TYPE_ACCELEROMETER) }
+    val gyroAvailable = remember { motionCapture.isAvailable(Sensor.TYPE_GYROSCOPE) }
+    val magAvailable = remember { motionCapture.isAvailable(Sensor.TYPE_MAGNETIC_FIELD) }
+    var probing by remember { mutableStateOf(true) }
+    var sensorRows by remember {
+        mutableStateOf(
+            listOf(
+                SensorRow("Microphone", micGranted, 0.0),
+                SensorRow("Accelerometer", accelAvailable, 0.0),
+                SensorRow("Gyroscope", gyroAvailable, 0.0),
+                SensorRow("Magnetometer", magAvailable, 0.0),
+            )
+        )
+    }
+    LaunchedEffect(Unit) {
+        val reading = runCatching { motionCapture.capture(1) }.getOrNull()
+        sensorRows = listOf(
+            SensorRow("Microphone", micGranted, Constants.SAMPLE_RATE_HZ.toDouble()),
+            SensorRow("Accelerometer", accelAvailable, reading?.accelRateHz ?: 0.0),
+            SensorRow("Gyroscope", gyroAvailable, reading?.gyroRateHz ?: 0.0),
+            SensorRow("Magnetometer", magAvailable, reading?.magRateHz ?: 0.0),
+        )
+        probing = false
+    }
+
+    // Created once at screen level (not re-entered inside runChecks/the probe effect) so the
+    // 1 s sensor probe's state update recomposes SensorsSection without resetting scroll offset.
+    val scrollState = rememberScrollState()
+
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { pad ->
         Column(
-            Modifier.fillMaxSize().padding(pad).padding(20.dp),
+            Modifier.fillMaxSize().padding(pad).verticalScroll(scrollState).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text("Go / no-go", style = MaterialTheme.typography.displayLarge, color = TextHi)
-            Text("Confirm the setup before taking a reading.", color = TextMid)
+            Text("Pre-check", style = MaterialTheme.typography.headlineMedium, color = FioriColors.TextPrimary)
+            Text("Confirm the setup before taking a reading.", color = FioriColors.TextSecondary)
 
             SectionCard {
                 CheckRow("Microphone permission", if (micGranted) Check.PASS else Check.FAIL)
                 CheckRow("Accelerometer present", if (hasAccel) Check.PASS else Check.FAIL)
-                CheckRow("Baseline captured for this asset", hasBaseline)
+                CheckRow("Reference measurement captured for this equipment", hasBaseline)
                 CheckRow("Phone resting still on the housing", resting)
             }
 
             Text(
-                "Tip: press the phone flat against a solid part of the machine frame — not a panel or guard.",
-                color = TextMid,
+                "Tip: press the phone flat against a solid part of the machine frame, not a panel or guard.",
+                color = FioriColors.TextSecondary,
                 style = MaterialTheme.typography.bodyMedium,
             )
 
-            Spacer(Modifier.weight(1f))
+            SensorsSection(sensorRows, probing)
 
-            OutlinedButton(
+            Spacer(Modifier.height(24.dp))
+
+            GhostButton(
+                text = if (running) "Checking" else "Run checks",
                 onClick = { runChecks() },
                 enabled = !running,
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text(if (running) "Checking…" else "Run checks") }
+            )
 
             val ready = micGranted && hasAccel && hasBaseline == Check.PASS && resting == Check.PASS
-            Button(
+            PrimaryButton(
+                text = "Proceed to take reading",
                 onClick = onProceed,
                 enabled = ready,
-                modifier = Modifier.fillMaxWidth().height(54.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Ink),
-            ) { Text("Proceed to diagnose", fontWeight = FontWeight.Bold) }
+                modifier = Modifier.fillMaxWidth(),
+            )
 
-            OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Back") }
+            TextButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
+                Text("Back", color = FioriColors.TextSecondary)
+            }
         }
     }
 }
 
 @Composable
 private fun CheckRow(label: String, state: Check) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        val (icon, tint) = when (state) {
-            Check.PASS -> Icons.Default.CheckCircle to StatusHealthy
-            Check.FAIL -> Icons.Default.Cancel to StatusCritical
-            Check.UNKNOWN -> Icons.Default.RadioButtonUnchecked to TextMid
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, color = FioriColors.TextPrimary, modifier = Modifier.weight(1f))
+        val (text, semantic) = when (state) {
+            Check.PASS -> "Pass" to Semantic.POSITIVE
+            Check.FAIL -> "Fail" to Semantic.NEGATIVE
+            Check.UNKNOWN -> "Pending" to Semantic.NEUTRAL
         }
-        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
-        Text("  $label", color = TextHi, modifier = Modifier.padding(start = 4.dp))
+        StatusChip(text = text, semantic = semantic)
     }
+}
+
+@Composable
+private fun SensorsSection(rows: List<SensorRow>, probing: Boolean) {
+    FioriSectionHeader("Sensors")
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        rows.forEach { row ->
+            val (statusText, statusSemantic) = if (row.available) "Available" to Semantic.POSITIVE else "Not available" to Semantic.NEUTRAL
+            FioriObjectCell(
+                title = row.label,
+                subtitle = sensorSubtitle(row, probing),
+                status = { FioriStatusLabel(statusText, statusSemantic) },
+            )
+        }
+    }
+    Text(
+        "Barometer, light and proximity are not used",
+        color = FioriColors.TextSecondary,
+        style = MaterialTheme.typography.bodyMedium,
+    )
+}
+
+private fun sensorSubtitle(row: SensorRow, probing: Boolean): String = when {
+    !row.available -> "Not available, feature set to 0"
+    probing -> "Measuring"
+    else -> "%.1f Hz".format(row.rateHz)
 }

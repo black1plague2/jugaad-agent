@@ -3,6 +3,8 @@ package com.jugaad.agent.ui.nav
 object Routes {
     const val ASSETS = "assets"
     const val CREATE_ASSET = "create_asset"
+    const val NETWORK = "network"
+    const val GROUP_SETTINGS = "group_settings"
 
     const val ASSET_DETAIL = "asset/{assetId}"
     const val BASELINE = "baseline/{assetId}"

@@ -30,10 +30,21 @@ object Constants {
     const val FEATURE_DIM = N_MELS * 2                               // 256
 
     // --- IMU vibration index ------------------------------------------------------
-    /** Target accelerometer rate; HIGH_SAMPLING_RATE_SENSORS is required above 200 Hz. */
+    /** Target accelerometer/gyroscope rate; HIGH_SAMPLING_RATE_SENSORS is required above 200 Hz. */
     const val IMU_TARGET_RATE_HZ = 400
     const val IMU_BAND_LOW_HZ = 5.0
     const val IMU_BAND_HIGH_HZ = 60.0
+
+    // --- Magnetometer vibration index ----------------------------------------------
+    /** Capture-buffer sizing; phones typically sample B at 50-100 Hz. */
+    const val MAG_TARGET_RATE_HZ = 100
+    const val MAG_BAND_LOW_HZ = 3.0
+    const val MAG_BAND_HIGH_HZ = 25.0
+
+    // --- Federated feature vector ---------------------------------------------------
+    /** accel/gyro/mag-index/mag-rms deltas appended after the 256-d log-mel feature. */
+    const val SENSOR_DIMS = 4
+    const val FEATURE_DIM_TOTAL = FEATURE_DIM + SENSOR_DIMS   // 260
 
     // --- Baseline ------------------------------------------------------------------
     const val BASELINE_CLIPS = 3

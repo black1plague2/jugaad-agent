@@ -11,6 +11,8 @@ coroutines = "1.9.0"
 camerax = "1.4.1"
 jtransforms = "3.1"
 junit = "4.13.2"
+tensorflowLite = "2.16.1"
+workRuntime = "2.9.1"
 
 # --- Optional on-device ML runtimes (see gradle.properties flags) --------------
 # ExecuTorch Android runtime. Coordinates/version current as of the ExecuTorch
@@ -45,6 +47,9 @@ androidx-camera-view = { group = "androidx.camera", name = "camera-view", versio
 jtransforms = { group = "com.github.wendykierp", name = "JTransforms", version.ref = "jtransforms" }
 
 junit = { group = "junit", name = "junit", version.ref = "junit" }
+
+tensorflow-lite = { group = "org.tensorflow", name = "tensorflow-lite", version.ref = "tensorflowLite" }
+androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "workRuntime" }
 
 # Optional — only resolved when the corresponding gradle.properties flag is true.
 executorch-android = { group = "org.pytorch", name = "executorch-android", version.ref = "executorch" }

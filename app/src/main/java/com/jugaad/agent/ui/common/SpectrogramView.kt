@@ -11,21 +11,22 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
+import com.jugaad.agent.ui.common.fiori.FioriColors
 import com.jugaad.agent.viz.HeatColor
 
 /**
  * The animated "machine heartbeat": the log-mel heatmap with a sweeping scan
- * line and a gentle breathing pulse. Purely decorative motion — the data is static.
+ * line and a gentle breathing pulse. Purely decorative motion, the data is static.
  */
 @Composable
 fun SpectrogramView(
@@ -69,7 +70,7 @@ fun SpectrogramView(
         if (animate && image != null) {
             val x = sweep * size.width
             drawLine(
-                color = Color.White.copy(alpha = 0.35f),
+                color = FioriColors.TextPrimary.copy(alpha = 0.35f),
                 start = Offset(x, 0f),
                 end = Offset(x, size.height),
                 strokeWidth = 2f,
@@ -79,7 +80,7 @@ fun SpectrogramView(
 }
 
 private fun DrawScope.drawPlaceholder() {
-    drawRect(Color(0xFF121821))
+    drawRect(FioriColors.Surface)
 }
 
 /**
@@ -121,7 +122,7 @@ fun SpectrogramImage(
         if (animate && image != null) {
             val x = sweep * size.width
             drawLine(
-                color = Color.White.copy(alpha = 0.35f),
+                color = FioriColors.TextPrimary.copy(alpha = 0.35f),
                 start = Offset(x, 0f),
                 end = Offset(x, size.height),
                 strokeWidth = 2f,

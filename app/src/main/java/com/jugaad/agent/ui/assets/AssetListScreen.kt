@@ -1,8 +1,6 @@
 package com.jugaad.agent.ui.assets
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,11 +17,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material.icons.outlined.Hub
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -34,58 +36,74 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.jugaad.agent.core.config.MachineCatalog
 import com.jugaad.agent.domain.model.Asset
-import com.jugaad.agent.ui.common.SectionCard
+import com.jugaad.agent.domain.model.MachineStatus
+import com.jugaad.agent.ui.common.fiori.FioriColors
+import com.jugaad.agent.ui.common.fiori.FioriEmptyState
+import com.jugaad.agent.ui.common.fiori.FioriObjectCell
+import com.jugaad.agent.ui.common.fiori.FioriSectionHeader
+import com.jugaad.agent.ui.common.fiori.PrimaryButton
+import com.jugaad.agent.ui.common.fiori.Semantic
+import com.jugaad.agent.ui.common.fiori.StatusChip
+import com.jugaad.agent.ui.common.fiori.semantic
 import com.jugaad.agent.ui.services
-import com.jugaad.agent.ui.theme.Accent
-import com.jugaad.agent.ui.theme.InkCard
-import com.jugaad.agent.ui.theme.InkLine
-import com.jugaad.agent.ui.theme.StatusHealthy
-import com.jugaad.agent.ui.theme.TextHi
-import com.jugaad.agent.ui.theme.TextLo
-import com.jugaad.agent.ui.theme.TextMid
 import com.jugaad.agent.ui.vmFactory
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AssetListScreen(
     onOpenAsset: (String) -> Unit,
     onCreate: () -> Unit,
+    onLearn: () -> Unit,
 ) {
     val services = LocalContext.current.services()
     val vm: AssetListViewModel = viewModel(factory = vmFactory { AssetListViewModel(services) })
     val assets by vm.assets.collectAsStateWithLifecycle()
     val engine by vm.engineStatus.collectAsStateWithLifecycle()
+    val lastStatus by vm.lastStatus.collectAsStateWithLifecycle()
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = onCreate,
-                containerColor = Accent,
-                contentColor = MaterialTheme.colorScheme.background,
-            ) {
-                Icon(Icons.Default.Add, contentDescription = null)
-                Text("  New asset", fontWeight = FontWeight.Bold)
+        topBar = {
+            TopAppBar(
+                title = {},
+                actions = {
+                    IconButton(onClick = onLearn) {
+                        Icon(Icons.Outlined.Hub, contentDescription = "Federated network", tint = FioriColors.TextPrimary)
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
+            )
+        },
+        bottomBar = {
+            Box(Modifier.fillMaxWidth().padding(20.dp)) {
+                PrimaryButton(
+                    text = "New equipment",
+                    onClick = onCreate,
+                    modifier = Modifier.fillMaxWidth(),
+                    icon = Icons.Default.Add,
+                )
             }
         },
     ) { pad ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(pad),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             item {
                 Column {
-                    Text("Jugaad Agent", style = MaterialTheme.typography.displayLarge, color = TextHi)
+                    Text("Jugaad Agent", style = MaterialTheme.typography.headlineMedium, color = FioriColors.TextPrimary)
                     Text(
                         "Offline condition monitoring",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = TextMid,
+                        color = FioriColors.TextSecondary,
                     )
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(16.dp))
                     EngineBanner(
                         socName = vm.socName,
                         cnn = engine.cnnBackendLabel,
@@ -96,21 +114,21 @@ fun AssetListScreen(
                 }
             }
 
+            item {
+                FioriSectionHeader(title = "Equipment")
+            }
+
             if (assets.isEmpty()) {
                 item {
-                    SectionCard {
-                        Text("No assets yet", color = TextHi, fontWeight = FontWeight.SemiBold)
-                        Text(
-                            "Tap “New asset”, name the machine, then capture a healthy baseline.",
-                            color = TextMid,
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                    }
+                    FioriEmptyState(
+                        title = "No equipment yet",
+                        body = "Tap New equipment, name the machine, then capture a reference measurement.",
+                    )
                 }
             }
 
             items(assets, key = { it.id }) { asset ->
-                AssetRow(asset = asset, onClick = { onOpenAsset(asset.id) })
+                AssetRow(asset = asset, lastStatus = lastStatus[asset.id], onClick = { onOpenAsset(asset.id) })
             }
         }
     }
@@ -121,25 +139,24 @@ private fun EngineBanner(socName: String, cnn: String, cnnReady: Boolean, gemmaR
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(InkCard)
-            .border(1.dp, InkLine, RoundedCornerShape(12.dp))
-            .padding(12.dp),
+            .clip(RoundedCornerShape(16.dp))
+            .background(FioriColors.Surface)
+            .padding(16.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Column(Modifier.weight(1f)) {
-            Text("DEVICE", color = TextLo, style = MaterialTheme.typography.labelLarge)
-            Text(socName, color = TextHi, fontWeight = FontWeight.SemiBold)
+            Text("DEVICE", color = FioriColors.TextDisabled, style = MaterialTheme.typography.labelMedium)
+            Text(socName, color = FioriColors.TextPrimary, fontWeight = FontWeight.SemiBold)
         }
         Column(horizontalAlignment = Alignment.End) {
             Text(
-                if (cnnReady) "CNN · $cnn" else "CNN · $cnn",
-                color = if (cnnReady) StatusHealthy else TextMid,
+                "CNN · $cnn",
+                color = if (cnnReady) FioriColors.Positive else FioriColors.TextSecondary,
                 style = MaterialTheme.typography.bodyMedium,
             )
             Text(
                 if (gemmaReady) "LLM · Gemma ready" else "LLM · template",
-                color = if (gemmaReady) StatusHealthy else TextMid,
+                color = if (gemmaReady) FioriColors.Positive else FioriColors.TextSecondary,
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
@@ -147,28 +164,20 @@ private fun EngineBanner(socName: String, cnn: String, cnnReady: Boolean, gemmaR
 }
 
 @Composable
-private fun AssetRow(asset: Asset, onClick: () -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(InkCard)
-            .border(1.dp, InkLine, RoundedCornerShape(14.dp))
-            .clickable(onClick = onClick)
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(asset.name, color = TextHi, style = MaterialTheme.typography.titleLarge)
-            val created = SimpleDateFormat("d MMM yyyy", Locale.getDefault()).format(Date(asset.createdAtMs))
-            Text(
-                if (asset.hasBaseline) "Baseline set · created $created" else "No baseline · created $created",
-                color = if (asset.hasBaseline) StatusHealthy else TextMid,
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        }
-        Box {
-            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = TextMid)
-        }
-    }
+private fun AssetRow(asset: Asset, lastStatus: MachineStatus?, onClick: () -> Unit) {
+    val created = SimpleDateFormat("d MMM yyyy", Locale.getDefault()).format(Date(asset.createdAtMs))
+    val typeLabel = MachineCatalog.byId(asset.machineTypeId).label
+    FioriObjectCell(
+        title = asset.name,
+        subtitle = "$typeLabel · created $created",
+        status = {
+            if (lastStatus != null) {
+                StatusChip(text = lastStatus.label, semantic = lastStatus.semantic())
+            } else {
+                StatusChip(text = "No readings yet", semantic = Semantic.NEUTRAL)
+            }
+        },
+        trailing = { Icon(Icons.Default.ChevronRight, contentDescription = null, tint = FioriColors.TextSecondary) },
+        onClick = onClick,
+    )
 }
