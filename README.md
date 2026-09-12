@@ -1,7 +1,7 @@
 # Jugaad Agent
 
-Jugaad Agent turns an ordinary Android phone, resting on a machine housing, into a
-fused vibration and acoustic sensor for rotating equipment. It captures a short
+Jugaad Agent turns an ordinary Android phone, placed on a machine housing, into a
+combined vibration and acoustic sensor for rotating equipment. It records a short
 healthy reference for each machine, then reports a Healthy / Warning / Critical
 condition, an optional fault class, and a plain-language recommended action on
 every subsequent check.
@@ -13,8 +13,8 @@ files directory.
 
 ## Key properties
 
-- **Offline by construction.** No network permission, no cloud dependency.
-- **No training data required.** Each asset is characterised from a 12-second
+- **Offline by design.** No network permission, no cloud dependency.
+- **No training data needed.** Each asset is characterised from a 12-second
   healthy baseline; the primary decision path is unsupervised.
 - **Single device, two sensors.** The microphone and the accelerometer are
   sampled over the same three-second window and analysed together.
