@@ -106,6 +106,24 @@ class RecoveryTest {
     }
 
     @Test
+    fun allNaNWeightFileOfCorrectLengthIsQuarantinedAsStale() {
+        // Mirrors the real fleet-breaking scenario: FedAvg merged with totalN == 0 before the
+        // guard existed, so every float came out NaN but the file length still matches the
+        // variant exactly and would otherwise pass the length-only check as healthy.
+        val filesDir = tmp.newFolder()
+        val flDir = File(filesDir, "fl").apply { mkdirs() }
+        val spec = FlVariants.byId("centroid")
+        val nanWeights = FloatArray(spec.weightCount) { Float.NaN }
+        File(flDir, "weights_centroid.bin").writeBytes(WeightsCodec.encode(nanWeights))
+
+        val report = Recovery.repair(filesDir)
+
+        assertTrue(report.staleWeights.contains("weights_centroid.bin"))
+        assertFalse(File(flDir, "weights_centroid.bin").exists())
+        assertTrue(flDir.listFiles()!!.any { it.name == "weights_centroid.bin.stale" })
+    }
+
+    @Test
     fun jsonlFilesUnderFlAreNeverTouched() {
         val filesDir = tmp.newFolder()
         val flDir = File(filesDir, "fl").apply { mkdirs() }

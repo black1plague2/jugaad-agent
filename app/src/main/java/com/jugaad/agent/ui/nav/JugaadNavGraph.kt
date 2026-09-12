@@ -59,7 +59,11 @@ fun JugaadNavGraph(nav: NavHostController) {
             Routes.ASSET_DETAIL,
             arguments = listOf(navArgument("assetId") { type = NavType.StringType }),
         ) { entry ->
-            val id = entry.arguments!!.getString("assetId")!!
+            val id = entry.arguments?.getString("assetId")
+            if (id == null) {
+                nav.popBackStack(Routes.ASSETS, inclusive = false)
+                return@composable
+            }
             AssetDetailScreen(
                 assetId = id,
                 onBack = { nav.popBackStack() },
@@ -75,7 +79,11 @@ fun JugaadNavGraph(nav: NavHostController) {
             Routes.BASELINE,
             arguments = listOf(navArgument("assetId") { type = NavType.StringType }),
         ) { entry ->
-            val id = entry.arguments!!.getString("assetId")!!
+            val id = entry.arguments?.getString("assetId")
+            if (id == null) {
+                nav.popBackStack(Routes.ASSETS, inclusive = false)
+                return@composable
+            }
             BaselineScreen(
                 assetId = id,
                 onDone = { nav.popBackStack() },
@@ -87,7 +95,11 @@ fun JugaadNavGraph(nav: NavHostController) {
             Routes.CHECKLIST,
             arguments = listOf(navArgument("assetId") { type = NavType.StringType }),
         ) { entry ->
-            val id = entry.arguments!!.getString("assetId")!!
+            val id = entry.arguments?.getString("assetId")
+            if (id == null) {
+                nav.popBackStack(Routes.ASSETS, inclusive = false)
+                return@composable
+            }
             ChecklistScreen(
                 assetId = id,
                 onProceed = {
@@ -103,7 +115,11 @@ fun JugaadNavGraph(nav: NavHostController) {
             Routes.DIAGNOSE,
             arguments = listOf(navArgument("assetId") { type = NavType.StringType }),
         ) { entry ->
-            val id = entry.arguments!!.getString("assetId")!!
+            val id = entry.arguments?.getString("assetId")
+            if (id == null) {
+                nav.popBackStack(Routes.ASSETS, inclusive = false)
+                return@composable
+            }
             DiagnoseScreen(
                 assetId = id,
                 onResult = { assetId, diagnosisId ->
@@ -122,8 +138,12 @@ fun JugaadNavGraph(nav: NavHostController) {
                 navArgument("diagnosisId") { type = NavType.StringType },
             ),
         ) { entry ->
-            val assetId = entry.arguments!!.getString("assetId")!!
-            val diagnosisId = entry.arguments!!.getString("diagnosisId")!!
+            val assetId = entry.arguments?.getString("assetId")
+            val diagnosisId = entry.arguments?.getString("diagnosisId")
+            if (assetId == null || diagnosisId == null) {
+                nav.popBackStack(Routes.ASSETS, inclusive = false)
+                return@composable
+            }
             ResultScreen(
                 assetId = assetId,
                 diagnosisId = diagnosisId,
@@ -140,7 +160,11 @@ fun JugaadNavGraph(nav: NavHostController) {
             Routes.HISTORY,
             arguments = listOf(navArgument("assetId") { type = NavType.StringType }),
         ) { entry ->
-            val id = entry.arguments!!.getString("assetId")!!
+            val id = entry.arguments?.getString("assetId")
+            if (id == null) {
+                nav.popBackStack(Routes.ASSETS, inclusive = false)
+                return@composable
+            }
             HistoryScreen(
                 assetId = id,
                 onOpen = { diagId -> nav.navigate(Routes.result(id, diagId)) },

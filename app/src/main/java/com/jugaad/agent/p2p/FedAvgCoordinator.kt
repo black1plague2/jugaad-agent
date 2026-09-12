@@ -2,6 +2,7 @@ package com.jugaad.agent.p2p
 
 import com.jugaad.agent.core.Logx
 import com.jugaad.agent.core.config.ConfigStore
+import com.jugaad.agent.fl.AcceptGuard
 import com.jugaad.agent.fl.EventType
 import com.jugaad.agent.fl.FedAvg
 import com.jugaad.agent.fl.FlVariants
@@ -137,7 +138,7 @@ class FedAvgCoordinator(private val peer: FlPeer) {
                                 val nTrain = peer.metrics(vId).nTrain
                                 val before = peer.evaluateVal(vId, null)
                                 val after = peer.evaluateVal(vId, w)
-                                val ok = nTrain < 5 || after >= before - 0.10f
+                                val ok = AcceptGuard.accept(nTrain, before, after, ConfigStore.effective.value)
                                 accepted[vId] = ok
                                 valAfter[vId] = after
                                 if (ok) {
@@ -244,8 +245,8 @@ class FedAvgCoordinator(private val peer: FlPeer) {
                 )
             }
             sockets.add(first)
-            val sessions = mutableListOf<ClientSession>()
-            readClientSession(first)?.let { sessions.add(it) }
+            val rawSessions = mutableListOf<ClientSession>()
+            readClientSession(first)?.let { rawSessions.add(it) }
 
             val deadline = System.currentTimeMillis() + windowMs
             val previousTimeout = server.soTimeout
@@ -255,7 +256,7 @@ class FedAvgCoordinator(private val peer: FlPeer) {
                     try {
                         val next = server.accept()
                         sockets.add(next)
-                        readClientSession(next)?.let { sessions.add(it) }
+                        readClientSession(next)?.let { rawSessions.add(it) }
                     } catch (e: SocketTimeoutException) {
                         // keep polling until the window elapses
                     }
@@ -267,6 +268,17 @@ class FedAvgCoordinator(private val peer: FlPeer) {
                     Logx.w("fl sync: failed to restore server socket timeout", e)
                 }
             }
+
+            // De-duplicate by deviceId, keeping the LAST session seen this window: a phone that
+            // reconnects mid-window (an auto-join retry after a timeout is enough) would otherwise
+            // be recorded once per connection, so its weights and nTrain get FedAvg'd in several
+            // times over and the node/event counts are inflated (D1/D2). The last session carries
+            // the most recent weights, so it wins over any earlier one from the same deviceId.
+            // Everything below (contributions, node cards, the event text, the reported node count)
+            // reads this single deduplicated list rather than patching each call site separately.
+            val sessions = LinkedHashMap<String, ClientSession>().apply {
+                for (s in rawSessions) put(s.deviceId, s)
+            }.values.toList()
 
             val now = System.currentTimeMillis()
             val championBefore = peer.network.championId
@@ -299,6 +311,19 @@ class FedAvgCoordinator(private val peer: FlPeer) {
                 if (contributions.isEmpty()) continue
 
                 val merged = FedAvg.merge(contributions)
+                if (merged == null) {
+                    // Every contributor (owner included) reported zero trained samples this
+                    // round: nothing to merge, so leave the variant's weights and round counter
+                    // untouched rather than fabricate progress.
+                    Logx.i("fl sync: skipping $v, no trained samples this round")
+                    continue
+                }
+                if (merged.any { !it.isFinite() }) {
+                    // Defense in depth against any other arithmetic path producing NaN/Infinity:
+                    // never apply or persist a non-finite merge result.
+                    Logx.w("fl sync: rejecting non-finite merge result for $v")
+                    continue
+                }
                 val newRound = maxRound + 1
                 mergedWeights[v] = merged
                 newRoundByVariant[v] = newRound
@@ -307,7 +332,7 @@ class FedAvgCoordinator(private val peer: FlPeer) {
                     val nTrain = peer.metrics(v).nTrain
                     val before = peer.evaluateVal(v, null)
                     val after = peer.evaluateVal(v, merged)
-                    val ok = nTrain < 5 || after >= before - 0.10f
+                    val ok = AcceptGuard.accept(nTrain, before, after, ConfigStore.effective.value)
                     accepted[v] = ok
                     valBefore[v] = before
                     valAfter[v] = after

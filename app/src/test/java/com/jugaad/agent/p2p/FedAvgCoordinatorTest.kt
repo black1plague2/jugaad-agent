@@ -384,6 +384,133 @@ class FedAvgCoordinatorTest {
     }
 
     @Test
+    fun zeroTrainedSamplesSkipsVariantWithoutAdvancingRoundOrWeights() {
+        val server = ServerSocket(SyncProtocol.port())
+        try {
+            val owner = FakeFlPeer("owner01", mode = NodeMode.STABLE)
+            val ownerWeights = floatArrayOf(1f, 2f)
+            owner.addVariant("base", ownerWeights, round = 5, nTrain = 0, nVal = 0, trainAcc = 0f, valAcc = -1f) { -1f }
+
+            val client = FakeFlPeer("client01", mode = NodeMode.STABLE)
+            client.addVariant("base", floatArrayOf(9f, 9f), round = 5, nTrain = 0, nVal = 0, trainAcc = 0f, valAcc = -1f) { -1f }
+
+            runBlocking {
+                val serverJob = async { FedAvgCoordinator(owner).serveOnce(server, windowMs = 500) }
+                val clientJob = async { FedAvgCoordinator(client).runAsClient("127.0.0.1") }
+                serverJob.await()
+                clientJob.await()
+            }
+
+            // No node trained this round: nothing to merge, so weights and the round counter
+            // stay exactly as they were rather than fabricate progress from an all-NaN average.
+            assertArrayEquals(ownerWeights, owner.weights("base"), 1e-6f)
+            assertEquals(5, owner.metrics("base").round)
+        } finally {
+            server.close()
+        }
+    }
+
+    @Test
+    fun nonFiniteMergeResultIsRejectedAndLocalWeightsAreUntouched() {
+        val server = ServerSocket(SyncProtocol.port())
+        try {
+            val owner = FakeFlPeer("owner01", mode = NodeMode.STABLE)
+            // Simulates a phone already carrying a poisoned weight from before this fix.
+            val ownerWeights = floatArrayOf(Float.NaN, 2f)
+            owner.addVariant("base", ownerWeights, round = 5, nTrain = 10, nVal = 5, trainAcc = 0.9f, valAcc = 0.9f) { 0.9f }
+
+            val client = FakeFlPeer("client01", mode = NodeMode.STABLE)
+            client.addVariant("base", floatArrayOf(3f, 4f), round = 5, nTrain = 10, nVal = 5, trainAcc = 0.9f, valAcc = 0.9f) { 0.9f }
+
+            runBlocking {
+                val serverJob = async { FedAvgCoordinator(owner).serveOnce(server, windowMs = 500) }
+                val clientJob = async { FedAvgCoordinator(client).runAsClient("127.0.0.1") }
+                serverJob.await()
+                clientJob.await()
+            }
+
+            // totalN > 0 here, so FedAvg.merge doesn't short-circuit; the NaN contributor still
+            // makes the result non-finite, and the coordinator must reject it before applying it.
+            assertArrayEquals(ownerWeights, owner.weights("base"), 0f)
+            assertEquals(5, owner.metrics("base").round)
+        } finally {
+            server.close()
+        }
+    }
+
+    // D1/D2: a device reconnecting inside one merge window (an auto-join retry after a
+    // timeout is enough) must be counted once, not once per connection, or its weights and
+    // nTrain get FedAvg'd in several times over and the node/event counts are inflated.
+    @Test
+    fun duplicateDeviceIdConnectingSeveralTimesContributesOnceAndProducesOneCard() {
+        val server = ServerSocket(SyncProtocol.port())
+        try {
+            val owner = FakeFlPeer("owner01", mode = NodeMode.STABLE)
+            owner.addVariant("base", floatArrayOf(0f, 0f), round = 1, nTrain = 30, nVal = 0, trainAcc = 0.9f, valAcc = -1f) { -1f }
+
+            // Same deviceId connects three times within one window (an auto-join retry after a
+            // timeout is enough to do this on a real phone). Each reports nTrain=10; if dedup
+            // fails, phoneA's contribution is tripled to nTrain=30 and skews the weighted
+            // average away from the value a single, correctly-deduplicated contribution gives.
+            val result = runBlocking {
+                val serverJob = async { FedAvgCoordinator(owner).serveOnce(server, windowMs = 700) }
+                val clientJobs = (1..3).map {
+                    async {
+                        val phone = FakeFlPeer("phoneA", mode = NodeMode.STABLE)
+                        phone.addVariant("base", floatArrayOf(30f, 30f), round = 1, nTrain = 10, nVal = 0, trainAcc = 0.9f, valAcc = -1f) { -1f }
+                        FedAvgCoordinator(phone).runAsClient("127.0.0.1")
+                    }
+                }
+                val r = serverJob.await()
+                clientJobs.forEach { it.await() } // the 2 deduplicated-away sockets fail their read; that's fine here
+                r
+            }
+
+            // owner(nTrain=30, w=0) + one deduplicated phoneA(nTrain=10, w=30) -> (0*30+30*10)/40 = 7.5.
+            // Were dedup not applied, phoneA would count 3x: (0*30+30*10*3)/60 = 15.
+            assertArrayEquals(floatArrayOf(7.5f, 7.5f), owner.weights("base"), 1e-3f)
+            assertEquals(1, result.peers)
+            assertEquals(1, owner.network.nodes.count { it.deviceId == "phoneA" })
+        } finally {
+            server.close()
+        }
+    }
+
+    @Test
+    fun distinctDeviceIdsAllSurviveDeduplication() {
+        val server = ServerSocket(SyncProtocol.port())
+        try {
+            val owner = FakeFlPeer("owner01", mode = NodeMode.STABLE)
+            owner.addVariant("base", floatArrayOf(0f, 0f), round = 1, nTrain = 30, nVal = 0, trainAcc = 0.9f, valAcc = -1f) { -1f }
+
+            val clientA = FakeFlPeer("clientA", mode = NodeMode.STABLE)
+            clientA.addVariant("base", floatArrayOf(10f, 10f), round = 1, nTrain = 10, nVal = 0, trainAcc = 0.9f, valAcc = -1f) { -1f }
+            val clientB = FakeFlPeer("clientB", mode = NodeMode.STABLE)
+            clientB.addVariant("base", floatArrayOf(20f, 20f), round = 1, nTrain = 20, nVal = 0, trainAcc = 0.9f, valAcc = -1f) { -1f }
+
+            val result = runBlocking {
+                val serverJob = async { FedAvgCoordinator(owner).serveOnce(server, windowMs = 700) }
+                val jobA = async { FedAvgCoordinator(clientA).runAsClient("127.0.0.1") }
+                val jobB = async { FedAvgCoordinator(clientB).runAsClient("127.0.0.1") }
+                val r = serverJob.await()
+                jobA.await()
+                jobB.await()
+                r
+            }
+
+            // Two distinct clients: both must survive dedup and both contribute to the merge.
+            assertEquals(2, result.peers)
+            assertEquals(1, owner.network.nodes.count { it.deviceId == "clientA" })
+            assertEquals(1, owner.network.nodes.count { it.deviceId == "clientB" })
+            // Weighted average across owner(30) + clientA(10) + clientB(20), total 60.
+            val expected = (0f * 30 + 10f * 10 + 20f * 20) / 60f
+            assertArrayEquals(floatArrayOf(expected, expected), owner.weights("base"), 1e-3f)
+        } finally {
+            server.close()
+        }
+    }
+
+    @Test
     fun weightsWithMismatchedSchemaVersionAreIgnoredWithEvent() {
         val server = ServerSocket(SyncProtocol.port())
         try {
