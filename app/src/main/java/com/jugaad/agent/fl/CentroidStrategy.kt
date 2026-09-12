@@ -27,9 +27,17 @@ class CentroidStrategy(
     private val json = Json { prettyPrint = true; ignoreUnknownKeys = true }
     private val weightsFile = File(dir, "weights_${spec.id}.bin")
     private val metricsFile = File(dir, "metrics_${spec.id}.json")
+    // D11 fix: which classes have ever received a real training signal (locally or via a peer
+    // merge). Persisted the same way as [centroids] -- a little-endian float file in the same
+    // [dir], via the same [WeightsCodec] already used for weights_<id>.bin -- rather than a new
+    // file format, so it survives process restart exactly like the centroids do. A plain "is the
+    // centroid all-zero" check was tried first and rejected: CentroidMathTest legitimately trains
+    // a class whose true per-dim mean is exactly 0f, which would be misread as "never trained".
+    private val trainedFile = File(dir, "trained_${spec.id}.bin")
     private val dim = FlConstants.INPUT_DIM
 
     private var centroids: FloatArray = loadOrInitCentroids()
+    private var trainedMask: BooleanArray = loadOrInitTrainedMask()
 
     private val _metrics = MutableStateFlow(loadOrInitMetrics())
     override val metrics: StateFlow<VariantMetrics> = _metrics
@@ -56,9 +64,11 @@ class CentroidStrategy(
             if (counts[c] == 0) continue // no samples this class this round -> keep the previous centroid
             val base = c * dim
             for (i in 0 until dim) updated[base + i] = sums[c][i] / counts[c]
+            trainedMask[c] = true // this class just received a real (possibly all-zero-mean) sample mean
         }
         centroids = updated
         saveWeightsFile(centroids)
+        saveTrainedMask()
 
         val trainAcc = evaluateTrain()
         val valAcc = evaluateVal()
@@ -111,8 +121,19 @@ class CentroidStrategy(
         require(w.size == spec.weightCount) {
             "CentroidStrategy.applyMerged: expected ${spec.weightCount} weights, got ${w.size}"
         }
+        // FedAvg carries no separate "which classes did peers train" signal, only the merged
+        // centroid floats -- so a class trained only on a peer is recognized here by its merged
+        // centroid being non-zero. This can't misfire the way it would inside predict/classify:
+        // FedAvg.merge only ever writes into a class's slot when at least one contributor had
+        // nTrain > 0 for it, so a non-zero result here really does mean somebody trained it.
+        for (c in 0 until FlConstants.N_CLASSES) {
+            if (trainedMask[c]) continue
+            val base = c * dim
+            for (i in 0 until dim) if (w[base + i] != 0f) { trainedMask[c] = true; break }
+        }
         centroids = w.copyOf()
         saveWeightsFile(centroids)
+        saveTrainedMask()
         saveMetrics(_metrics.value.copy(round = newRound))
     }
 
@@ -124,21 +145,34 @@ class CentroidStrategy(
     }
 
     private fun classify(x: FloatArray, c: FloatArray): FloatArray {
-        val logits = FloatArray(FlConstants.N_CLASSES) { cls -> -0.5f * squaredDistance(x, c, cls) / dim }
+        // D11 fix: an untrained class is never a prediction candidate -- its stale/initial
+        // all-zero centroid otherwise sits right on top of a healthy (near-origin) sample in
+        // this baseline-relative feature space.
+        val trained = (0 until FlConstants.N_CLASSES).filter { trainedMask[it] }
+        if (trained.isEmpty()) {
+            // No class has ever been trained (locally or via a peer merge): there is no signal
+            // to put probability mass behind. Return an all-zero distribution rather than crash
+            // or divide by zero in softmax.
+            return FloatArray(FlConstants.N_CLASSES)
+        }
+        val logits = FloatArray(FlConstants.N_CLASSES) { cls ->
+            if (cls in trained) -0.5f * squaredDistance(x, c, cls) / dim else Float.NEGATIVE_INFINITY
+        }
         return softmax(logits)
     }
 
     private fun predict(x: FloatArray, c: FloatArray): Int {
-        var best = 0
+        var best = -1
         var bestDist = Float.MAX_VALUE
         for (cls in 0 until FlConstants.N_CLASSES) {
+            if (!trainedMask[cls]) continue // untrained classes are never prediction candidates
             val d = squaredDistance(x, c, cls)
             if (d < bestDist) {
                 bestDist = d
                 best = cls
             }
         }
-        return best
+        return best // -1 when no class has ever been trained; never a valid label, safe everywhere it's compared
     }
 
     private fun squaredDistance(x: FloatArray, c: FloatArray, cls: Int): Float {
@@ -174,6 +208,22 @@ class CentroidStrategy(
         val loaded = weightsFile.takeIf { it.exists() }
             ?.let { runCatching { WeightsCodec.decode(it.readBytes()) }.getOrNull() }
         return if (loaded != null && loaded.size == spec.weightCount) loaded else FloatArray(spec.weightCount)
+    }
+
+    private fun loadOrInitTrainedMask(): BooleanArray {
+        val loaded = trainedFile.takeIf { it.exists() }
+            ?.let { runCatching { WeightsCodec.decode(it.readBytes()) }.getOrNull() }
+        return if (loaded != null && loaded.size == FlConstants.N_CLASSES) {
+            BooleanArray(FlConstants.N_CLASSES) { loaded[it] != 0f }
+        } else {
+            BooleanArray(FlConstants.N_CLASSES) // fresh strategy: nothing trained yet, none crash-worthy
+        }
+    }
+
+    private fun saveTrainedMask() {
+        trainedFile.parentFile?.mkdirs()
+        val asFloats = FloatArray(FlConstants.N_CLASSES) { if (trainedMask[it]) 1f else 0f }
+        trainedFile.writeBytes(WeightsCodec.encode(asFloats))
     }
 
     private fun loadOrInitMetrics(): VariantMetrics {
