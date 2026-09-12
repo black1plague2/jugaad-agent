@@ -113,17 +113,19 @@ are not committed.
 
 ## Where things stand (2026-09-12, 18:2x IST)
 
-- v1 to v5 and the v5.1 defect pass are implemented and built: APK sha256 prefix
-  `acef994390dc5ece`, 165/165 JVM tests. All three phones run it on a wiped learning state; A
-  has one bench-flagged piece of equipment ("Coffee machine (bench)"), B and C have none.
+- v1 to v6 are implemented and built: APK sha256 prefix `19db41fcdfde61ff`, 168/168 JVM
+  tests. All three phones run it on a wiped learning state (node names regenerate as
+  `I2501-xxxx`; rename under Group settings); equipment on the phones is bench-flagged only.
+- v6 (latest): phones on the same WiFi find the owner by node name over mDNS
+  (`p2p/LanDiscovery.kt`, Devices > "Nearby on this WiFi", "Serve as owner"); verified end to
+  end on the three phones, `tools/devtest9/REPORT.md`. WiFi Direct remains for no-router use.
 - The full change set since the initial commit `0b6ab1d` is committed in one commit on top of
   it (this file's commit). The on-device verification passes are summarised in `HANDOFF.md`
   ("Verified on hardware") and in each plan's Result section.
-- In progress at the time of writing: E8, a focused on-device re-verification of the v5.1 fixes
-  and of the federated flow from a clean state (3 nodes, recovery from a corrupt `network.json`,
-  failover banner, Pre-check scroll, bench calibration hidden, single-line chips). Its report is
-  `tools/devtest8/REPORT.md` if it exists; if it does not, run that pass again before claiming
-  the fixes work on hardware.
+- Not yet verified on hardware: the v5.1 fixes (recovery from a corrupt `network.json`,
+  failover banner, Pre-check scroll, bench calibration card hidden, single-line chips). The
+  agent that was to verify them (E8) died on a session-limit error; run that pass (checklist in
+  `plans/2026-09-12-v5-humane-minimalist-ui.md`, "Result, defect pass") before claiming them.
 - Open items: the founder's reading of "SAP conventions" (implemented as Plant-Maintenance
   vocabulary, visual language replaced by the Humane Minimalist Dark theme on request); after a
   failover the other clients must Discover and Connect to the new owner by hand; Airflow

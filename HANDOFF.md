@@ -14,7 +14,7 @@ binding contracts and each ends with a "Result" section of verified facts.
 | Anomaly | cosine score to the reference plus per-sensor z-scores; robust adaptive calibration (median/MAD) after every label; drift detection and reference refresh |
 | Diagnosis | machine catalogue `assets/config/machines.json` (13 types, 58 faults, keywords, evidence rules, actions); `EvidenceExtractor` (17 metrics) + `RulesEngine` rank "Likely issues" on every non-healthy reading; notification proposal leads with the top issue |
 | Learning | LiteRT 2.16.1 on-device training; 8 strategies (base, small, deep, noise, balanced, uncertain, distill, centroid) with early stopping, weight decay, held-out split, overfit gap; heads pretrained offline on MAFAULDA (`ml/data/README.md`) |
-| Network | WiFi Direct group, protocol v2 framing; per-variant FedAvg with accept-guard; champion/challenger promotion (>= 3 pts, 2 rounds); node registry, standings, events, policy replication; peer sample exchange into a shared pool; failover and watchdog; retries with backoff |
+| Network | WiFi Direct group or plain WiFi LAN (owner advertised by node name over mDNS, `LanDiscovery`), protocol v2 framing; per-variant FedAvg with accept-guard; champion/challenger promotion (>= 3 pts, 2 rounds); node registry, standings, events, policy replication; peer sample exchange into a shared pool; failover and watchdog; retries with backoff |
 | Config | every tunable in `assets/config/app_config.json` (defaults -> device overrides -> owner policy) |
 | Self-healing | startup repair of corrupt JSON / stale weights, role restore, retries, failover, watchdog worker |
 | UI | Humane Minimalist Dark (Stitch-inspired): bundled Work Sans, `#07080A` canvas, single crimson accent; equipment flow (list, create with machine-type search and bench flag, detail with calibration, pre-check, reference, reading, result with spectrogram heatmap and issues, history) and a federated shell with Network / Devices / Sync / Performance + Group settings; every Stitch heatmap placeholder is a real heatmap |
@@ -42,7 +42,16 @@ binding contracts and each ends with a "Result" section of verified facts.
   labels, MetricRow alignment, all 8 architectures listed on an empty standings table); dead
   `SyncBus.requestSync` removed (auto-sync after training goes through `SyncNow.asClient`);
   165/165 JVM tests; APK sha `acef994390dc5ece` installed on A, B, C after a learning-data wipe
-  that kept the bench equipment; E8 focused re-verification results are appended at the bottom.
+  that kept the bench equipment. E8 (focused re-verification of those fixes) died on a Sonnet
+  session-limit 429 before reporting, so the v5.1 fixes are verified by build and tests only.
+- v6 (21:4x-21:5x phone clock): peer discovery by node name on the same WiFi (`LanDiscovery`,
+  mDNS/DNS-SD next to WiFi Direct; Devices > "Nearby on this WiFi"; "Serve as owner"; automatic
+  owner pick in `SyncNow`). Verified on the three phones from a wiped state: A serves and
+  advertises, B and C list A by node name within 2 s without a tap, both sync over the LAN
+  (A: `owner 2 node(s) merged`), "Sync now" with no owner chosen picks the only advertised owner,
+  node registry shows all three by name. 168/168 JVM tests. Final APK sha `19db41fcdfde61ff`
+  (adds the router-over-group-address preference) installed on A, B, C. Report:
+  `tools/devtest9/REPORT.md`; contract: `plans/2026-09-12-v6-lan-discovery.md`.
 
 ## Device access
 

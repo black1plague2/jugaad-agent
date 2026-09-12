@@ -44,6 +44,7 @@ fun DevicesTab(
     ) {
         OwnerUnreachableBanner(ui)
         HeaderCard(ui, vm, runWithWifiPermission, runWithServicePermission)
+        NearbySection(ui, vm)
         PeersSection(ui, runWithWifiPermission, vm)
         DatasetOverviewSection(ui)
         PeerSampleMatrixSection(ui)
@@ -81,12 +82,7 @@ private fun HeaderCard(
             Switch(checked = ui.schedulerEnabled, onCheckedChange = { vm.toggleScheduler(it) })
         }
         when {
-            !ui.group.formed -> PrimaryButton(
-                text = "Create group",
-                onClick = { runWithWifiPermission { vm.createGroup() } },
-                modifier = Modifier.fillMaxWidth(),
-            )
-            ui.group.isGroupOwner -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            ui.serving || ui.group.isGroupOwner -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 PrimaryButton(
                     text = "Start sync service",
                     onClick = { runWithServicePermission { vm.startServing() } },
@@ -95,12 +91,31 @@ private fun HeaderCard(
                 )
                 GhostButton(text = "Stop", onClick = { vm.stopServing() }, enabled = ui.serving, modifier = Modifier.weight(1f))
             }
-            else -> PrimaryButton(
-                text = "Sync now",
-                onClick = { vm.syncNow() },
-                enabled = ui.modelReady && !ui.busy && ui.group.ownerAddress != null,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            // Client, or no group yet: sync to the WiFi Direct owner or to an owner seen on
+            // this WiFi network; or become the owner (the service also forms a WiFi Direct group).
+            else -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                PrimaryButton(
+                    text = "Sync now",
+                    onClick = { vm.syncNow() },
+                    enabled = ui.modelReady && !ui.busy && (ui.group.ownerAddress != null || ui.lanPeers.isNotEmpty()),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    GhostButton(
+                        text = "Serve as owner",
+                        onClick = { runWithServicePermission { vm.startServing() } },
+                        enabled = ui.modelReady,
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (!ui.group.formed) {
+                        GhostButton(
+                            text = "Create group",
+                            onClick = { runWithWifiPermission { vm.createGroup() } },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -128,6 +143,41 @@ private fun PeersSection(ui: NetworkUiState, runWithWifiPermission: (() -> Unit)
                 if (peer.status != 0) {
                     GhostButton(text = "Connect", onClick = { runWithWifiPermission { vm.connect(peer.address) } })
                 }
+            }
+        }
+    }
+}
+
+/** Owners advertising on the local WiFi network (mDNS), listed by node name; tapping Sync uses
+ * the owner's LAN address directly, no WiFi Direct pairing needed. */
+@Composable
+private fun NearbySection(ui: NetworkUiState, vm: NetworkViewModel) {
+    SectionTitle("Nearby on this WiFi", trailing = "${ui.lanPeers.size} owner" + if (ui.lanPeers.size == 1) "" else "s")
+    if (ui.lanPeers.isEmpty()) {
+        FioriEmptyState("No owner on this network yet", "Start the sync service on the owner phone; it appears here by node name within a few seconds.")
+        return
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        ui.lanPeers.forEach { peer ->
+            val isLast = peer.host == ui.config?.lastOwnerAddress
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(FioriColors.Surface).padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(peer.name, color = FioriColors.TextPrimary, style = MaterialTheme.typography.titleLarge, maxLines = 1)
+                    Text(
+                        if (isLast) "${peer.host}, last owner" else peer.host,
+                        color = FioriColors.TextSecondary,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                GhostButton(
+                    text = "Sync",
+                    onClick = { vm.syncWith(peer.host) },
+                    enabled = ui.modelReady && !ui.busy && !ui.serving,
+                )
             }
         }
     }
