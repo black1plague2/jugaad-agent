@@ -303,3 +303,15 @@ owner"; the service still forms a WiFi Direct group for phones without a router.
 advertisement is filtered out by device id; a name that resolves on both interfaces keeps the
 router address over the 192.168.49.x group address. The status chip reads "Owner visible on WiFi"
 before the first sync and "Synchronized" after it. Evidence: `tools/devtest9/REPORT.md`.
+
+Auto-join (same day, later): nobody has to tap Sync. `p2p/AutoJoin.kt` runs for the life of the
+app process (started next to `AutoTrainer`): while this phone is not serving and an owner is
+advertised, it syncs with that owner at once and again every `sync.autoJoinIntervalMs`
+(default 60 s, `sync.autoJoin` turns it off); a new or changed owner triggers an immediate
+sync; a failed attempt waits one interval and counts toward failover like any client sync.
+`SyncNow` holds one lock so auto-join, manual taps, the trainer and the scheduler never run two
+client sessions at once. The Devices tab shows the loop state under the status chip ("Waiting
+for an owner on this WiFi", "Joining X", "Joined X, next sync in N s", "Serving; other phones on
+this WiFi join this one", "2 owners visible, pick one under Nearby"). The mDNS browser is one
+process-wide object (`ServiceLocator.lanDiscovery`) shared by auto-join, the sync service and
+the Devices tab.

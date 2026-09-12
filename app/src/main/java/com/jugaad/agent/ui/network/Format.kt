@@ -6,6 +6,7 @@ import com.jugaad.agent.core.config.AppConfig
 import com.jugaad.agent.core.config.ConfigSource
 import com.jugaad.agent.core.config.ConfigStore
 import com.jugaad.agent.domain.model.FaultClass
+import com.jugaad.agent.fl.NodeRole
 import com.jugaad.agent.fl.NodeMode
 import com.jugaad.agent.fl.VariantStanding
 import com.jugaad.agent.ui.common.fiori.FioriBanner
@@ -52,6 +53,7 @@ internal fun syncStatus(ui: NetworkUiState): Pair<String, Semantic> {
     return when {
         failed -> "Sync failed" to Semantic.CRITICAL
         ui.serving -> "Serving" to Semantic.POSITIVE
+        ui.lastSync != null && ui.config?.lastRole == NodeRole.CLIENT -> "Synchronized" to Semantic.POSITIVE
         ui.group.isGroupOwner -> "Group formed, not serving" to Semantic.CRITICAL
         ui.lastSync != null -> "Synchronized" to Semantic.POSITIVE
         ui.group.formed -> "Connected" to Semantic.INFORMATIVE

@@ -1,4 +1,4 @@
-# Jugaad Agent, handoff (state as of 2026-09-12, 17:35 IST)
+# Jugaad Agent, handoff (state as of 2026-09-12, 22:1x IST)
 
 Offline, on-device condition monitoring for rotating machines: a phone on the housing records
 microphone + accelerometer + gyroscope + magnetometer, compares each reading with the machine's own
@@ -52,6 +52,12 @@ binding contracts and each ends with a "Result" section of verified facts.
   node registry shows all three by name. 168/168 JVM tests. Final APK sha `19db41fcdfde61ff`
   (adds the router-over-group-address preference) installed on A, B, C. Report:
   `tools/devtest9/REPORT.md`; contract: `plans/2026-09-12-v6-lan-discovery.md`.
+- v7 (22:0x phone clock): auto-join (`p2p/AutoJoin.kt`, process-wide, `sync.autoJoin` /
+  `sync.autoJoinIntervalMs` in `app_config.json`, one lock in `SyncNow`). Set one phone as owner
+  ("Serve as owner"); every other phone on the WiFi joins it within about 3 s of discovery and
+  re-syncs every 60 s, with the loop state shown under the Devices status chip. Verified: B and C
+  joined A on launch with no tap; A stopped, C became owner, A and B joined C by themselves
+  (`owner 2 node(s) merged`). 171/171 JVM tests. Final APK sha `4f255d832ddaace1` installed on A, B, C.
 
 ## Device access
 

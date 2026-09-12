@@ -107,6 +107,9 @@ data class Sync(
     val retryBackoffMs: List<Int> = listOf(2000, 5000, 15000),
     val failoverAfterFailures: Int = 3,
     val autoFailover: Boolean = true,
+    /** Clients sync to the owner advertised on this WiFi without a tap (see AutoJoin). */
+    val autoJoin: Boolean = true,
+    val autoJoinIntervalMs: Int = 60000,
 )
 
 @Serializable

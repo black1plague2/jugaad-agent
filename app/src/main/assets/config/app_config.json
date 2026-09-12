@@ -58,7 +58,9 @@
     "staleMinutes": 30,
     "retryBackoffMs": [2000, 5000, 15000],
     "failoverAfterFailures": 3,
-    "autoFailover": true
+    "autoFailover": true,
+    "autoJoin": true,
+    "autoJoinIntervalMs": 60000
   },
   "sharing": {
     "enabled": true,

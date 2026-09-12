@@ -9,6 +9,8 @@ import com.jugaad.agent.fl.NodeRole
 import com.jugaad.agent.ui.services
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
@@ -22,7 +24,11 @@ import kotlinx.coroutines.withTimeoutOrNull
  * streak), and triggers [Failover] once the failure streak and node ordering call for it.
  */
 object SyncNow {
-    suspend fun asClient(context: Context, host: String? = null): SyncResult? {
+    /** Manual taps, [AutoJoin], [com.jugaad.agent.fl.AutoTrainer] and [SyncWorker] all land
+     * here; one client session at a time keeps two merges from racing on the same weights. */
+    private val lock = Mutex()
+
+    suspend fun asClient(context: Context, host: String? = null): SyncResult? = lock.withLock {
         val flRuntime = context.services().flRuntime.value ?: return null
         val ownerAddress = host ?: resolveOwner(context, flRuntime) ?: return null
         Logx.i("fl sync: client target $ownerAddress")
@@ -46,7 +52,7 @@ object SyncNow {
             Failover.takeOver(context)
         }
 
-        return result
+        result
     }
 
     /** WiFi Direct group owner if a group is formed, else the owner advertising on this WiFi
@@ -57,30 +63,28 @@ object SyncNow {
         try {
             val group = withTimeoutOrNull(3000) { manager.group.first { it.formed } } ?: manager.group.value
             if (group.formed && group.ownerAddress != null) {
-                return if (group.isGroupOwner) null else group.ownerAddress
+                if (!group.isGroupOwner) return group.ownerAddress
+                if (SyncBus.serving.value) return null
+                // A group this phone owns but no longer serves: fall through to the LAN path.
             }
         } finally {
             manager.stop()
         }
         if (SyncBus.serving.value) return null
 
-        val lan = LanDiscovery(context)
+        // The process-wide discovery is normally already running (AutoJoin starts it); give a
+        // cold start a moment to hear the first advertisement.
+        val me = flRuntime.config.value.deviceId
+        val lan = context.services().lanDiscovery
         lan.startDiscovery()
-        try {
-            delay(LAN_SCAN_MS)
-            val peers = lan.peers.value.filterNot { it.deviceId == flRuntime.config.value.deviceId }
-            val pick = LanDiscovery.pickOwner(peers, flRuntime.config.value.lastOwnerAddress)
-            Logx.i("fl sync: lan scan found ${peers.size} owner(s) ${peers.map { it.name }}, picked ${pick?.name}")
-            return pick?.host
-        } finally {
-            lan.stopDiscovery()
-        }
+        val peers = (withTimeoutOrNull(LAN_SCAN_MS) { lan.peers.first { list -> list.any { it.deviceId != me } } }
+            ?: lan.peers.value).filterNot { it.deviceId == me }
+        val pick = LanDiscovery.pickOwner(peers, flRuntime.config.value.lastOwnerAddress)
+        Logx.i("fl sync: lan scan found ${peers.size} owner(s) ${peers.map { it.name }}, picked ${pick?.name}")
+        return pick?.host
     }
 
     private const val LAN_SCAN_MS = 3000L
-
-    /** A session that never threw; [FedAvgCoordinator.runAsClient] swallows failures into this message shape. */
-    private fun SyncResult.succeeded(): Boolean = !message.startsWith("fl sync: client failed")
 
     /** Pure failure-count/reset transition, pulled out of [asClient] so it's unit-testable
      * without WiFi Direct or a real [com.jugaad.agent.fl.FlRuntime]. */
@@ -91,3 +95,6 @@ object SyncNow {
             current.copy(consecutiveSyncFailures = current.consecutiveSyncFailures + 1)
         }
 }
+
+/** A session that never threw; [FedAvgCoordinator.runAsClient] swallows failures into this message shape. */
+internal fun SyncResult.succeeded(): Boolean = !message.startsWith("fl sync: client failed")
