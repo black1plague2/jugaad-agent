@@ -17,6 +17,8 @@ import com.jugaad.agent.domain.usecase.CaptureBaselineUseCase
 import com.jugaad.agent.domain.usecase.DiagnoseUseCase
 import com.jugaad.agent.domain.usecase.RefreshBaselineUseCase
 import com.jugaad.agent.fl.AutoTrainer
+import com.jugaad.agent.p2p.AutoJoin
+import com.jugaad.agent.p2p.LanDiscovery
 import com.jugaad.agent.fl.EventType
 import com.jugaad.agent.fl.FlRuntime
 import com.jugaad.agent.fl.FlVariants
@@ -97,6 +99,9 @@ class ServiceLocator private constructor(app: Context) {
     private val _flRuntime = MutableStateFlow<FlRuntime?>(null)
     val flRuntime: StateFlow<FlRuntime?> = _flRuntime
 
+    /** One mDNS advertiser/browser for the process: AutoJoin, the sync service and the Devices tab share it. */
+    val lanDiscovery: LanDiscovery by lazy { LanDiscovery(appContext) }
+
     private val templateAdvisor = TemplateAdvisor()
 
     val engineStatus = MutableStateFlow(EngineStatus())
@@ -143,6 +148,7 @@ class ServiceLocator private constructor(app: Context) {
                         FlVariants.ALL, installed.flHeads, sampleStore, nodeConfig, networkState, flDir, threads, recovery,
                     )
                     AutoTrainer(runtime, appScope, appContext).start()
+                    AutoJoin(runtime, appScope, appContext, lanDiscovery).start()
                     _flRuntime.value = runtime
 
                     for (name in recovery.repairedFiles) runtime.addEvent(EventType.RECOVER, "repaired corrupt file: $name")

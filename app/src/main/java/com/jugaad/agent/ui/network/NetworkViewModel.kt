@@ -62,6 +62,8 @@ data class NetworkUiState(
     val peers: List<WifiDirectManager.Peer> = emptyList(),
     /** Owners advertising on the local WiFi network, by node name (this device filtered out). */
     val lanPeers: List<LanDiscovery.LanPeer> = emptyList(),
+    /** [SyncBus.autoJoin] status line (waiting / joining / joined / off). */
+    val autoJoin: String? = null,
     val group: WifiDirectManager.GroupInfo = WifiDirectManager.GroupInfo(false, false, null),
     val serving: Boolean = false,
     val lastSync: SyncResult? = null,
@@ -90,7 +92,7 @@ class NetworkViewModel(
 ) : ViewModel() {
 
     private val manager = WifiDirectManager(appContext)
-    private val lan = LanDiscovery(appContext)
+    private val lan = services.lanDiscovery
 
     private val _ui = MutableStateFlow(NetworkUiState(schedulerEnabled = SyncScheduler.isEnabled(appContext)))
     val ui: StateFlow<NetworkUiState> = _ui
@@ -121,6 +123,9 @@ class NetworkViewModel(
         }
         viewModelScope.launch {
             SyncBus.serving.collect { s -> _ui.value = _ui.value.copy(serving = s) }
+        }
+        viewModelScope.launch {
+            SyncBus.autoJoin.collect { s -> _ui.value = _ui.value.copy(autoJoin = s) }
         }
         viewModelScope.launch {
             SyncBus.last.collect { r -> _ui.value = _ui.value.copy(lastSync = r) }
@@ -360,7 +365,7 @@ class NetworkViewModel(
     private fun launchSync(host: String?) {
         if (_ui.value.busy) return
         if (services.flRuntime.value == null) return
-        if (_ui.value.serving || (_ui.value.group.isGroupOwner && host == null)) {
+        if (_ui.value.serving) {
             _ui.value = _ui.value.copy(message = "This device is the owner; other phones sync to it")
             return
         }
@@ -401,7 +406,7 @@ class NetworkViewModel(
     }
 
     override fun onCleared() {
-        lan.stopDiscovery()
+        // lan is process-wide (AutoJoin keeps browsing); only the WiFi Direct receiver is ours.
         manager.stop()
         super.onCleared()
     }

@@ -66,6 +66,7 @@ private fun HeaderCard(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         StatusChip(text = statusText, semantic = statusSemantic)
+        ui.autoJoin?.let { Text(it, color = FioriColors.TextSecondary, style = MaterialTheme.typography.bodyMedium) }
         Text("$online active device" + if (online == 1) "" else "s", color = FioriColors.TextPrimary, style = MaterialTheme.typography.headlineMedium)
         val r = ui.lastSync
         if (r == null) {
@@ -154,7 +155,7 @@ private fun PeersSection(ui: NetworkUiState, runWithWifiPermission: (() -> Unit)
 private fun NearbySection(ui: NetworkUiState, vm: NetworkViewModel) {
     SectionTitle("Nearby on this WiFi", trailing = "${ui.lanPeers.size} owner" + if (ui.lanPeers.size == 1) "" else "s")
     if (ui.lanPeers.isEmpty()) {
-        FioriEmptyState("No owner on this network yet", "Start the sync service on the owner phone; it appears here by node name within a few seconds.")
+        FioriEmptyState("No owner on this network yet", "Tap Serve as owner on one phone; every other phone lists it here by node name and joins it on its own.")
         return
     }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {

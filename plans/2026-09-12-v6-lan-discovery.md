@@ -38,6 +38,11 @@ via adb; documentation direct.
   no longer refuses when there is no WiFi Direct group.
 - Devices tab: "Nearby on this WiFi" section listing peers by node name with a Sync button;
   Network tab status treats a successful LAN sync as Synchronized.
+- Auto-join (founder, 22:0x: "I set one as the owner, the others get connected automatically"):
+  `p2p/AutoJoin.kt`, a process-wide loop started with the FL runtime; pure `plan()` decides
+  each turn (off / serving / no owner / ambiguous / sync now / wait), `SyncNow` gets a mutex so
+  only one client session runs at a time, `sync.autoJoin` and `sync.autoJoinIntervalMs` in
+  `app_config.json`, status line on the Devices tab via `SyncBus.autoJoin`.
 
 ## Verification
 
@@ -64,6 +69,17 @@ Network tab lists I2501-6e00, I2501-6402, I2501-acba; C "Sync now" with nobody c
 found 1 owner(s) [I2501-6e00], picked I2501-6e00`, round 2. The owner resolved its own service on
 both interfaces (router and 192.168.49.1), which prompted the router-address preference in the
 final build `19db41fcdfde61ff`. Screenshots and table: `tools/devtest9/REPORT.md`.
+
+Auto-join (build `45f62e171aa9d608`, then `4f255d832ddaace1`): `AutoJoinTest` covers the pure
+planner (immediate sync for a new owner, wait until the interval elapses for the same owner,
+never while serving/off/ambiguous, last owner wins); 171/171 JVM tests. On device: B and C
+joined A within 3 s of discovery on launch with no tap (`auto-join: syncing with 'I2501-6e00'`,
+`owner 1 node(s) merged` twice on A); after A tapped Stop both showed "Waiting for an owner on
+this WiFi" (`lan: lost 'I2501-6e00'`); after C tapped Serve as owner, A and B found and joined C
+within 3 s (`auto-join: syncing with 'I2501-acba' at 192.168.66.134`, C `owner 2 node(s)
+merged`). Defect found and fixed in `4f255d832ddaace1`: the former owner's status chip showed
+its stale WiFi Direct group ("Group formed, not serving") instead of Synchronized. Table and
+screenshots: `tools/devtest9/REPORT.md` (E10).
 
 Not verified: behaviour on an access point with client isolation (no LAN path can work there;
 WiFi Direct unchanged), two owners advertising at once (unit-tested only), the background

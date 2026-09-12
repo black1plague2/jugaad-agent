@@ -66,7 +66,7 @@ export JAVA_HOME=/path/to/jdk17; export PATH="$JAVA_HOME/bin:$PATH"
 ./gradlew :app:assembleDebug :app:testDebugUnitTest
 ```
 
-   Expected: green build, 165/165 JVM tests (as of 2026-09-12 18:2x). The APK is
+   Expected: green build, 171/171 JVM tests (as of 2026-09-12 22:1x). The APK is
    `app/build/outputs/apk/debug/app-debug.apk`, package `com.jugaad.agent.debug`, activity
    `com.jugaad.agent.MainActivity`.
 4. Python is only needed to re-bake the on-device heads or to run the network simulator:
@@ -113,12 +113,14 @@ are not committed.
 
 ## Where things stand (2026-09-12, 18:2x IST)
 
-- v1 to v6 are implemented and built: APK sha256 prefix `19db41fcdfde61ff`, 168/168 JVM
-  tests. All three phones run it on a wiped learning state (node names regenerate as
-  `I2501-xxxx`; rename under Group settings); equipment on the phones is bench-flagged only.
-- v6 (latest): phones on the same WiFi find the owner by node name over mDNS
-  (`p2p/LanDiscovery.kt`, Devices > "Nearby on this WiFi", "Serve as owner"); verified end to
-  end on the three phones, `tools/devtest9/REPORT.md`. WiFi Direct remains for no-router use.
+- v1 to v7 are implemented and built: APK sha256 prefix `4f255d832ddaace1`, 171/171 JVM tests. All
+  three phones run it on a wiped learning state (node names regenerate as `I2501-xxxx`; rename
+  under Group settings); equipment on the phones is bench-flagged only.
+- v6 and v7 (latest): phones on the same WiFi find the owner by node name over mDNS
+  (`p2p/LanDiscovery.kt`, Devices > "Nearby on this WiFi") and join it automatically
+  (`p2p/AutoJoin.kt`): tap "Serve as owner" on one phone, the others sync to it within seconds
+  and every 60 s after. Verified end to end on the three phones, `tools/devtest9/REPORT.md`.
+  WiFi Direct remains for no-router use.
 - The full change set since the initial commit `0b6ab1d` is committed in one commit on top of
   it (this file's commit). The on-device verification passes are summarised in `HANDOFF.md`
   ("Verified on hardware") and in each plan's Result section.
