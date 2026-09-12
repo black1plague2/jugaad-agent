@@ -59,6 +59,21 @@ binding contracts and each ends with a "Result" section of verified facts.
   joined A on launch with no tap; A stopped, C became owner, A and B joined C by themselves
   (`owner 2 node(s) merged`). 171/171 JVM tests. Final APK sha `4f255d832ddaace1` installed on A, B, C.
 
+- v5.1 re-verified on hardware (E12, 22:2x-22:4x phone clock): the defect pass E8 never
+  delivered. Corrupt-`network.json` recovery, Pre-check scroll and the magnetometer row, the
+  hidden bench calibration card and single-line chips and nav labels all PASS on
+  `4f255d832ddaace1`. The owner-unreachable banner FAILED: a stale self-owned WiFi Direct group
+  suppressed it through `ui.group.isGroupOwner`, so a client with failing syncs saw only the
+  "Sync failed" chip; it now gates on `ui.serving` (`ui/network/Format.kt:46`) and was re-verified
+  with the stale group still held. Also fixed: the equipment list wrapped
+  "Snapdragon 8 Elite Gen 5" mid-word across four lines because the right Column of
+  `EngineBanner` had no weight (`ui/assets/AssetListScreen.kt:151`). Still open: a client sync
+  merge discards the startup RECOVER event, so Resilience can read "Repaired: network.json" above
+  "No recovery or failover events yet". 171/171 JVM tests. Report:
+  `tools/devtest10/REPORT.md`. Phone A runs the fixed build `25182085859111ae`; B and C were left
+  untouched on `4f255d832ddaace1` because this laptop lacks the founder's debug keystore, so
+  installing on A needed an uninstall (its data was tarred and restored).
+
 ## Device access
 
 Wireless adb on the office LAN: A `192.168.66.250:5555` (10BFAT1SUF000XP), B `192.168.66.225:5555`

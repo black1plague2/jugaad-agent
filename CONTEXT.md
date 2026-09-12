@@ -124,10 +124,14 @@ are not committed.
 - The full change set since the initial commit `0b6ab1d` is committed in one commit on top of
   it (this file's commit). The on-device verification passes are summarised in `HANDOFF.md`
   ("Verified on hardware") and in each plan's Result section.
-- Not yet verified on hardware: the v5.1 fixes (recovery from a corrupt `network.json`,
-  failover banner, Pre-check scroll, bench calibration card hidden, single-line chips). The
-  agent that was to verify them (E8) died on a session-limit error; run that pass (checklist in
-  `plans/2026-09-12-v5-humane-minimalist-ui.md`, "Result, defect pass") before claiming them.
+- The v5.1 fixes are now verified on hardware (E12, `tools/devtest10/REPORT.md`): recovery from
+  a corrupt `network.json`, Pre-check scroll and the magnetometer row, the hidden bench
+  calibration card and single-line chips and nav labels all pass. The failover banner failed and
+  was fixed: a stale self-owned WiFi Direct group suppressed it (`ui/network/Format.kt:46` now
+  gates on `ui.serving`). A mid-word wrap of the device name on the equipment list was fixed in
+  the same pass (`ui/assets/AssetListScreen.kt:151`). Phone A carries that build
+  (`25182085859111ae`); B and C are still on `4f255d832ddaace1`, since a debug APK built on
+  another laptop is signed with a different key and needs an uninstall to install.
 - Open items: the founder's reading of "SAP conventions" (implemented as Plant-Maintenance
   vocabulary, visual language replaced by the Humane Minimalist Dark theme on request); after a
   failover the other clients must Discover and Connect to the new owner by hand; Airflow
