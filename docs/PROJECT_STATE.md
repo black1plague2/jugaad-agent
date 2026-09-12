@@ -1,5 +1,8 @@
 # Jugaad Agent — Handoff
 
+> Superseded on 2026-09-12 by `HANDOFF.md` (current state) and `CONTEXT.md` (how to continue).
+> Kept as the original 10 Sep status document; the repository is public now.
+
 Offline, on-device condition-monitoring agent for rotating equipment. This is the
 full state of the project as it stands going into the event.
 

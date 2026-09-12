@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 560" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#444"/>
+    </marker>
+    <style>
+      .box{fill:#f6f7f9;stroke:#3a3f47;stroke-width:1.2;rx:8}
+      .acc{fill:#fdecec;stroke:#c30000;stroke-width:1.4;rx:8}
+      .phone{fill:#ffffff;stroke:#3a3f47;stroke-width:1.6;rx:14}
+      .t{fill:#1a1d21}
+      .h{fill:#1a1d21;font-weight:600;font-size:14px}
+      .s{fill:#5b6370;font-size:11.5px}
+      .l{stroke:#444;stroke-width:1.3;fill:none;marker-end:url(#a)}
+      .d{stroke:#c30000;stroke-width:1.3;fill:none;stroke-dasharray:5 4;marker-end:url(#a)}
+      .n{fill:#c30000;font-size:11.5px;font-weight:600}
+    </style>
+  </defs>
+  <rect width="1000" height="560" fill="#ffffff"/>
+  <text x="20" y="28" class="h" font-size="18">Federated network, one round with auto-join (three or more phones on the same WiFi)</text>
+  <text x="20" y="46" class="s">Tap "Serve as owner" on one phone. Every other phone finds it by node name and joins on its own, then re-syncs every 60 s. WiFi Direct is the same protocol without a router.</text>
+
+  <!-- Owner phone -->
+  <rect x="380" y="70" width="240" height="300" class="phone"/>
+  <text x="392" y="92" class="h">Owner  (I2501-6e00)</text>
+  <rect x="392" y="104" width="216" height="46" class="acc"/>
+  <text x="402" y="123" class="h">FlSyncService</text>
+  <text x="402" y="140" class="s">listens on TCP 8988, wake + WiFi locks</text>
+  <rect x="392" y="160" width="216" height="46" class="box"/>
+  <text x="402" y="179" class="h">Advertise _jugaad-fl._tcp.</text>
+  <text x="402" y="196" class="s">service name = node name, TXT id=deviceId</text>
+  <rect x="392" y="216" width="216" height="62" class="box"/>
+  <text x="402" y="235" class="h">FedAvgCoordinator.serveOnce</text>
+  <text x="402" y="252" class="s">5 s accept window, per-variant FedAvg</text>
+  <text x="402" y="266" class="s">weighted by nTrain, accept guard</text>
+  <rect x="392" y="288" width="216" height="70" class="box"/>
+  <text x="402" y="307" class="h">Promotion + registry</text>
+  <text x="402" y="324" class="s">network-wide held-out score; challenger</text>
+  <text x="402" y="338" class="s">wins 2 rounds by 3 pts = new champion;</text>
+  <text x="402" y="352" class="s">nodes, standings, events, owner policy</text>
+
+  <!-- Client B -->
+  <rect x="30" y="90" width="260" height="260" class="phone"/>
+  <text x="42" y="112" class="h">Client B  (I2501-6402)</text>
+  <rect x="42" y="124" width="236" height="46" class="box"/>
+  <text x="52" y="143" class="h">LanDiscovery (mDNS browse)</text>
+  <text x="52" y="160" class="s">resolves the owner by node name and IP</text>
+  <rect x="42" y="180" width="236" height="62" class="acc"/>
+  <text x="52" y="199" class="h">AutoJoin</text>
+  <text x="52" y="216" class="s">new owner: sync at once; same owner: every</text>
+  <text x="52" y="230" class="s">autoJoinIntervalMs; two owners: ask the user</text>
+  <rect x="42" y="252" width="236" height="46" class="box"/>
+  <text x="52" y="271" class="h">SyncNow (one session at a time)</text>
+  <text x="52" y="288" class="s">retries with backoff, counts failures</text>
+  <rect x="42" y="308" width="236" height="32" class="box"/>
+  <text x="52" y="329" class="s">Devices tab: "Joined I2501-6e00, next sync in 55 s"</text>
+
+  <!-- Client C -->
+  <rect x="710" y="90" width="260" height="260" class="phone"/>
+  <text x="722" y="112" class="h">Client C  (I2501-acba)</text>
+  <rect x="722" y="124" width="236" height="46" class="box"/>
+  <text x="732" y="143" class="h">LanDiscovery (mDNS browse)</text>
+  <text x="732" y="160" class="s">same list on every phone, owner filtered out</text>
+  <rect x="722" y="180" width="236" height="62" class="acc"/>
+  <text x="732" y="199" class="h">AutoJoin</text>
+  <text x="732" y="216" class="s">joins within about 3 s of discovery</text>
+  <text x="732" y="230" class="s">(measured on the iQOO 15 phones)</text>
+  <rect x="722" y="252" width="236" height="46" class="box"/>
+  <text x="732" y="271" class="h">SyncNow</text>
+  <text x="732" y="288" class="s">HELLO, WEIGHTS per variant, SAMPLE_IDS, DONE</text>
+  <rect x="722" y="308" width="236" height="32" class="box"/>
+  <text x="732" y="329" class="s">receives MERGED weights + NETWORK state</text>
+
+  <!-- Arrows: discovery (dashed) and sync (solid) -->
+  <path d="M392,183 L290,150" class="d"/>
+  <text x="300" y="158" class="n">mDNS</text>
+  <path d="M608,183 L710,150" class="d"/>
+  <text x="640" y="158" class="n">mDNS</text>
+  <path d="M278,275 L392,247" class="l"/>
+  <text x="300" y="248" class="s">weights</text>
+  <path d="M392,262 L278,290" class="l"/>
+  <text x="300" y="296" class="s">merged</text>
+  <path d="M722,275 L608,247" class="l"/>
+  <text x="648" y="248" class="s">weights</text>
+  <path d="M608,262 L722,290" class="l"/>
+  <text x="648" y="296" class="s">merged</text>
+  <text x="392" y="384" class="s">TCP 8988, protocol v2: HELLO, WEIGHTS per variant, SAMPLE_IDS, DONE up; MERGED, NETWORK, SAMPLES down</text>
+
+  <!-- Bottom: lifecycle -->
+  <rect x="30" y="390" width="940" height="150" class="box"/>
+  <text x="42" y="412" class="h">What happens over time</text>
+  <text x="42" y="434" class="s">1. Owner stops or vanishes: clients see "lan: lost", the Devices tab reads "Waiting for an owner on this WiFi", nothing else changes.</text>
+  <text x="42" y="452" class="s">2. Another phone taps "Serve as owner": every client finds it and joins within seconds; the registry keeps all nodes by name, the round counter continues per variant.</text>
+  <text x="42" y="470" class="s">3. Failover: after sync.failoverAfterFailures (3) consecutive failures the next node in the ordering promotes itself, starts serving and advertising; the rest join it.</text>
+  <text x="42" y="488" class="s">4. Every sync re-scores champion and challengers on the network-wide held-out set; a PROMOTE event switches the classifier on every phone at the next sync.</text>
+  <text x="42" y="506" class="s">5. Startup: Recovery repairs corrupt JSON and quarantines stale weights; the owner role restores itself; a WorkManager watchdog syncs every 15 min when enabled.</text>
+  <text x="42" y="524" class="s">Bench-flagged equipment never contributes samples to any of this.</text>
+</svg>

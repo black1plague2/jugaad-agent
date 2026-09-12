@@ -1,280 +1,183 @@
 # Jugaad Agent
 
-Jugaad Agent turns an ordinary Android phone, placed on a machine housing, into a
-combined vibration and acoustic sensor for rotating equipment. It records a short
-healthy reference for each machine, then reports a Healthy / Warning / Critical
-condition, an optional fault class, and a plain-language recommended action on
-every subsequent check.
+Jugaad Agent turns an ordinary Android phone, placed on a machine housing, into a vibration,
+acoustic and magnetic sensor for rotating equipment. Each machine gets its own reference
+measurement; every later reading is compared with that reference and reported as Healthy,
+Warning or Critical with a score, a spectrogram, the likely issues from a machine catalogue and
+a plain-language action. Three or more phones then train and merge a fault classifier between
+themselves over WiFi Direct or the local WiFi network. Nothing leaves the phones; there is no
+cloud and no server.
 
-All processing runs on the device. There is no `INTERNET` permission: signal
-capture, feature extraction, anomaly scoring, the classifier and the language
-model all execute locally, and records are stored as JSON in the app's private
-files directory.
+Built for the iQOO hackathon on three iQOO 15 phones (Snapdragon 8 Elite Gen 5, 16 GB,
+Android 16). Everything described here has been verified on those phones; the evidence lives in
+`plans/*.md` (Result sections) and `tools/devtest9/REPORT.md`.
+
+![Architecture](docs/architecture.svg)
 
 ## Key properties
 
-- **Offline by design.** No network permission, no cloud dependency.
-- **No training data needed.** Each asset is characterised from a 12-second
-  healthy baseline; the primary decision path is unsupervised.
-- **Single device, two sensors.** The microphone and the accelerometer are
-  sampled over the same three-second window and analysed together.
-- **Hardware-aware inference.** The optional CNN runs through PyTorch ExecuTorch,
-  selecting the Hexagon NPU (QNN) on capable Snapdragon parts and falling back to
-  the CPU (XNNPACK) elsewhere, with a dependency-free heuristic as a final
-  fallback.
-- **Targets** Snapdragon 8 Elite–class devices as the primary platform, with a
-  functional CPU path for mid-range hardware.
+- **Offline by design.** All capture, features, scoring, diagnosis, training and merging run on
+  the phone. The only network traffic is phone to phone (model weights, standings, optional
+  labelled samples). The `INTERNET` permission exists only because Android gates every socket on
+  it; the app works with WiFi Direct in airplane mode.
+- **Four sensors, one clip.** Microphone at 44.1 kHz, accelerometer, gyroscope and magnetometer
+  are sampled over the same three seconds. Pre-check shows the measured rate of each.
+- **Per-machine reference, not a global model.** A 260-dimension feature (256 log-mel statistics
+  plus four sensor indices) is compared with the machine's own reference; thresholds calibrate
+  themselves from the readings the technician labels (median and MAD), and the reference is
+  refreshed when the machine drifts.
+- **A catalogue, not a black box.** `assets/config/machines.json` holds 13 machine types and 58
+  faults with keywords, evidence rules and actions. A rules engine ranks "Likely issues" from 17
+  evidence metrics on every non-healthy reading. Adding a machine type is a JSON edit.
+- **Federated self-improvement.** A LiteRT (TensorFlow Lite 2.16.1) classifier head is trained on
+  the phone with signature-based training. Eight strategies compete as champion and challengers;
+  the network promotes a challenger that beats the champion on the network-wide held-out set
+  twice by 3 points, and every phone switches at its next sync.
+- **Find each other by name, join automatically.** On the same WiFi, one tap of "Serve as owner"
+  is the whole setup: every other phone discovers the owner by node name over mDNS and syncs to
+  it within seconds, then every 60 s. WiFi Direct remains for places without a router.
+- **Self-healing.** Corrupt state files are repaired at start, stale weights quarantined, the
+  owner role restores itself, syncs retry with backoff, a client promotes itself after three
+  failed syncs, and a WorkManager watchdog keeps syncing in the background.
+- **Nothing hard-coded.** Every tunable is in `assets/config/app_config.json`, layered as
+  defaults, then device overrides, then the owner's replicated policy.
+- **Honest training data.** A "Bench / test equipment" flag on any equipment keeps its readings
+  out of training, sharing and calibration, so table tests never teach the model.
 
-## Workflow
+## Workflow on one phone
 
-| Step | Screen | Description |
-|------|--------|-------------|
-| 1. Register an asset | `CreateAssetScreen` | Name the machine and, optionally, capture a nameplate photograph with CameraX. |
-| 2. Capture a baseline | `BaselineScreen` | Record three three-second clips while the machine runs normally. The app stores the mean 256-dimension log-mel feature vector, the spread of the healthy cluster, and the mean vibration index. |
-| 3. Pre-check | `ChecklistScreen` | Verify microphone permission, accelerometer availability, the presence of a baseline, and that the phone is resting still against the housing. |
-| 4. Diagnose | `DiagnoseScreen` | Record one three-second clip. The app computes an anomaly score, and — when the machine is not healthy — a CNN fault class and a recommended action. |
-| 5. Review | `ResultScreen` | Condition indicator, animated spectrogram, recommended action, active inference backend, and an offline PNG report that can be shared through the system share sheet. |
+| Step | Screen | What happens |
+|---|---|---|
+| 1. New equipment | Create equipment | Name it, search the catalogue for the machine type (keywords like "pump", "filtration"), mark it as bench equipment if it is a test rig. |
+| 2. Pre-check | Pre-check | Microphone permission, the four sensors with their measured rates, a reference present, phone resting still. |
+| 3. Reference measurement | Reference | Three clips while the machine runs normally; stores the mean feature, the spread of the healthy cluster and the sensor index statistics. |
+| 4. Reading | Reading | One three-second clip. Anomaly score against the reference, per-sensor z-scores, classifier label when not healthy, likely issues, advice. |
+| 5. Result | Result | Status chip and score, spectrogram heatmap, likely issues with keyword chips and actions, label chips (confirming a label feeds training), notification proposal, share. |
+| 6. Calibration | Equipment detail | After a few labelled readings the thresholds T1/T2 recalibrate; drift shows a banner with a one-tap reference refresh. |
+| 7. History | History | Every reading with its status and a spectrogram thumbnail. |
 
-## Architecture
+## The federated network
 
-The project follows a layered structure with a framework-free domain layer and a
-hand-rolled composition root.
+![Network flow](docs/network-flow.svg)
 
-```mermaid
-flowchart TD
-    subgraph UI["Presentation layer, Jetpack Compose"]
-        SCR["Screens: assets, create, detail, baseline,<br/>checklist, diagnose, result, history"]
-    end
+Open **Federated network** from the equipment list. Four tabs plus Group settings:
 
-    subgraph DI["Composition root"]
-        SL["ServiceLocator"]
-    end
+- **Network**: status chip, nodes online and round, the latest reading's spectrogram, the node
+  list by name with role and held-out accuracy, experimental against stable cohorts.
+- **Devices**: the auto-join state ("Waiting for an owner on this WiFi", "Joining X", "Joined X,
+  next sync in N s", "Serving; other phones on this WiFi join this one"), "Nearby on this WiFi"
+  (owners advertised by node name), WiFi Direct peers, the dataset and peer-sample matrices,
+  "Serve as owner", "Sync now", "Create group".
+- **Sync**: rounds per variant, held-out accuracy and loss, last trained, activity (MERGE,
+  PROMOTE, FAILOVER, RECOVER events).
+- **Performance**: standings, the eight architectures with their scores, confusion heatmap,
+  feature importance by sensor group, device budget (SoC, threads, thermal, battery).
+- **Group settings**: node name, experimental or stable mode, pinned challenger, auto-train,
+  sample sharing, owner policy.
 
-    subgraph DOMAIN["Domain layer, framework-free"]
-        UC["CaptureBaselineUseCase<br/>DiagnoseUseCase"]
-        MOD["Models and repository interfaces"]
-    end
+How a round works: clients send HELLO plus their weights per variant (and offered sample ids);
+the owner merges each variant with FedAvg weighted by training-set size, rejects merges that
+fail the accept guard, rescores champion and challengers, decides promotions, and replies with
+the merged weights, the network state and any requested samples. Protocol v2 with `JGFL` framing
+on TCP port 8988, retries with backoff, one client session at a time per phone.
 
-    subgraph SENSOR["Sensor layer"]
-        AUD["AudioCapture: AudioRecord, UNPROCESSED, 44.1 kHz"]
-        IMU["ImuCapture: accelerometer on a HandlerThread"]
-        COORD["CaptureCoordinator: runs both, live waveform"]
-    end
+Strategies: `base` (260-64-3, the champion by default), `small` (260-32-3), `deep`
+(260-64-32-3), `noise` (input-noise augmentation), `balanced` (class-balanced batches),
+`uncertain` (trains only when uncertainty is high), `distill` (EMA self-distillation), `centroid`
+(nearest-centroid, no gradient). All use early stopping, weight decay and a held-out split; the
+heads ship pretrained on the public MAFAULDA dataset (`ml/data/README.md`).
 
-    subgraph MLLAYER["ML layer"]
-        SIG["signal: HannWindow, MelFilterBank,<br/>LogMelSpectrogram, ImuVibrationIndex"]
-        ANO["anomaly: AnomalyScorer, Thresholds"]
-        CLS["classifier: Heuristic or ExecuTorch"]
-        ADV["advisor: Template or Gemma"]
-        SUP["SocDetector, ModelInstaller, FeatureExtractor"]
-    end
+## Design language
 
-    subgraph DATA["Data layer"]
-        STORE["JsonFileStore: one JSON folder per asset"]
-        REPO["AssetRepository, DiagnosisRepository"]
-    end
-
-    subgraph VIZ["Visualization"]
-        REND["HeatColor, SpectrogramRenderer, ReportRenderer"]
-    end
-
-    UI --> SL
-    SL --> UC
-    UC --> COORD
-    UC --> SIG
-    UC --> ANO
-    UC --> CLS
-    UC --> ADV
-    UC --> REPO
-    UC --> REND
-    COORD --> AUD
-    COORD --> IMU
-    SIG --> ANO
-    CLS --> SUP
-    REPO --> STORE
-```
-
-## Processing pipeline
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Tech as Technician
-    participant UI as DiagnoseScreen
-    participant CC as CaptureCoordinator
-    participant FE as FeatureExtractor
-    participant AS as AnomalyScorer
-    participant CN as FaultClassifier
-    participant AV as MaintenanceAdvisor
-    participant DR as DiagnosisRepository
-
-    Tech->>UI: Start reading
-    UI->>CC: capture three seconds
-    CC->>CC: AudioRecord, 132300 samples at 44.1 kHz
-    CC->>CC: Accelerometer, rate measured from timestamps
-    CC-->>UI: live waveform and countdown
-    CC->>FE: raw audio and IMU samples
-    FE->>FE: log-mel 128 by 128 via JTransforms FFT
-    FE->>FE: 256-d feature, per-band mean and standard deviation
-    FE->>FE: vibration index, energy 5 to 60 Hz over total energy
-    FE->>AS: 256-d feature
-    AS->>AS: cosine distance to baseline mean, divided by spread
-    AS-->>UI: condition returned in under one second
-    opt classifier available
-        FE->>CN: log-mel image
-        CN->>CN: ExecuTorch, QNN then XNNPACK then heuristic
-        CN-->>AS: fault class, confidence, backend
-    end
-    AS->>AV: condition, score, fault, dominant frequency, vibration index
-    AV->>AV: Gemma 3 1B on device, or deterministic template
-    AV->>DR: diagnosis record and spectrogram PNG
-    DR-->>UI: open result
-```
-
-## Signal processing
-
-Every parameter is defined once in `app/build.gradle.kts` as a `buildConfigField`,
-mirrored in `core/Constants.kt`, and reproduced by `ml/logmel_reference.py` so the
-on-device front end and the reference implementation stay aligned.
-
-| Parameter | Value |
-|-----------|-------|
-| Sample rate | 44 100 Hz, mono, 16-bit |
-| Clip length | 3 s, 132 300 samples |
-| STFT | window 2048, hop 1024, periodic Hann, no centring |
-| Mel filter bank | 128 bands, 20 Hz to 11 kHz, HTK scale, unnormalised |
-| Compression | natural log of mel power plus 1e-6 |
-| Output image | 128 mel bins by 128 frames |
-| Feature vector | 256-d, per-band mean concatenated with per-band standard deviation |
-| Vibration index | linear detrend, Hann window, FFT, ratio of 5 to 60 Hz energy to total |
-
-The vibration index band requires only about 120 Hz of sampling, so it remains
-valid where the accelerometer stream is limited to 200 Hz.
-
-## On-device inference strategy
-
-```mermaid
-flowchart TD
-    START(["Fault label required"]) --> FLAG{"ExecuTorch enabled?"}
-    FLAG -- "no" --> HEUR["HeuristicFaultClassifier<br/>band-energy rules, no dependencies"]
-    FLAG -- "yes" --> SOCQ{"SoC exposes a usable NPU?"}
-    SOCQ -- "yes" --> QNNQ{"QNN model present and loads?"}
-    QNNQ -- "yes" --> NPU["ExecuTorch and QNN<br/>Hexagon NPU"]
-    QNNQ -- "no" --> XNNQ{"XNNPACK model present and loads?"}
-    SOCQ -- "no" --> XNNQ
-    XNNQ -- "yes" --> CPU["ExecuTorch and XNNPACK<br/>CPU"]
-    XNNQ -- "no" --> HEUR
-    NPU --> OUT(["Fault class, confidence, backend label"])
-    CPU --> OUT
-    HEUR --> OUT
-```
-
-- **Classifier.** Input `1 by 128 by 128`, four depthwise-separable blocks, global
-  average pooling, softmax over `Healthy`, `Rotor Imbalance` and
-  `Airflow Obstruction`. Approximately 60 000 parameters. The XNNPACK path targets
-  sub-second latency; the QNN path emits `[Qnn...]` lines to the system log.
-- **Recommended action.** Generated by Gemma 3 1B (4-bit) through the MediaPipe
-  LLM Inference API from a fixed prompt (`AdvicePrompt.build`). If the runtime or
-  model is absent, a deterministic `TemplateAdvisor` produces equivalent guidance.
-- Both runtimes are loaded by reflection, so the project compiles with the
-  feature flags disabled and activates the runtimes automatically once the
-  libraries and model files are present.
-
-## Decision logic
-
-```mermaid
-stateDiagram-v2
-    [*] --> NoBaseline
-    NoBaseline --> Ready: capture three healthy clips
-    Ready --> Diagnosing: start reading
-    Diagnosing --> Healthy: score at or below T1
-    Diagnosing --> Warning: score between T1 and T2
-    Diagnosing --> Critical: score above T2
-    Healthy --> Diagnosing: re-check
-    Warning --> Diagnosing: re-check
-    Critical --> Diagnosing: re-check
-```
-
-The anomaly score is the cosine distance between the current 256-d feature and the
-baseline mean, divided by the spread of the healthy cluster (the mean distance of
-the three baseline clips to their own mean, with a lower bound to prevent
-division by a near-zero value). The thresholds `T1` and `T2` default to 2 and 4
-and are adjustable per asset.
-
-## Screen map
-
-```mermaid
-flowchart LR
-    AL["Asset list"] --> CA["Create asset"]
-    AL --> AD["Asset detail"]
-    CA --> AD
-    AD --> BL["Baseline"]
-    AD --> CK["Checklist"]
-    CK --> DG["Diagnose"]
-    AD --> DG
-    DG --> RS["Result"]
-    RS --> HS["History"]
-    AD --> HS
-    HS --> RS
-```
+Humane Minimalist Dark: `#07080A` canvas, `#111317` cards, one crimson accent `#C30000`, bundled
+Work Sans variable font, large numerals, borderless rows, status chips that never wrap. The
+spectrogram heatmap is the visual centrepiece of every reading screen. UI strings contain no em or
+en dashes. Vocabulary follows plant maintenance practice: equipment, measurement document,
+notification proposal.
 
 ## Module layout
 
 ```
 app/src/main/java/com/jugaad/agent/
-  core/         Constants, Outcome, logging
-  sensor/       AudioCapture, ImuCapture, CaptureCoordinator
-  ml/
-    signal/     HannWindow, MelFilterBank, LogMelSpectrogram, ImuVibrationIndex
-    anomaly/    AnomalyScorer, Thresholds
-    classifier/ FaultClassifier, HeuristicFaultClassifier, ExecuTorchFaultClassifier
-    advisor/    MaintenanceAdvisor, TemplateAdvisor, GemmaAdvisor, AdvicePrompt
-    executorch/ SocDetector
-    FeatureExtractor, ModelInstaller
-  domain/       models, repository interfaces, use cases
-  data/         DTOs, JsonFileStore, repository implementations
-  viz/          HeatColor, AndroidSpectrogramRenderer, ReportRenderer
-  ui/           theme, shared components, navigation, one package per screen
-  di/           ServiceLocator
-app/src/test/   LogMelSpectrogramTest, AnomalyScorerTest
-ml/             model.py, train_cnn.py, export_executorch.py, logmel_reference.py
+  core/            Constants, Outcome, Logx (every log line is tagged JUGAAD)
+  core/config/     AppConfig, ConfigStore (defaults > overrides > owner policy), MachineCatalog
+  sensor/          AudioCapture, MotionCapture (accel, gyro, mag on one thread), CaptureCoordinator
+  ml/signal/       Hann window, mel filter bank, log-mel spectrogram, vibration and magnetic indices
+  ml/anomaly/      AnomalyScorer (cosine + z-scores), thresholds
+  ml/diagnosis/    EvidenceExtractor (17 metrics), RulesEngine over the catalogue
+  ml/classifier/   FaultClassifier interface, LiteRT federated head, heuristic fallback
+  ml/advisor/      TemplateAdvisor (default), GemmaAdvisor (optional, flag)
+  fl/              FlRuntime, FlVariants, VariantTrainer, EarlyStopping, RecipeBatching, Promotion,
+                   StrategyRank, Cohorts, TrainBudget, SampleStore, SharedPool, FeatureImportance,
+                   AcceptGuard, Recovery, NodeConfig, NetworkState, AutoTrainer, CentroidStrategy
+  p2p/             WifiDirectManager, LanDiscovery (mDNS), AutoJoin, SyncNow, SyncProtocol,
+                   FedAvgCoordinator, FlSyncService, Failover, SyncWorker, SyncScheduler, SyncBus
+  domain/          models, repository interfaces, use cases (diagnose, calibrate, refresh reference)
+  data/            DTOs, JSON file store, repository implementations
+  viz/             spectrogram and report renderers
+  ui/              theme, common components (ui/common/fiori, the name is historical), one package
+                   per equipment screen, ui/network (federated shell), ui/nav
+  di/              ServiceLocator (composition root; starts AutoTrainer and AutoJoin)
+app/src/main/assets/
+  config/          app_config.json, machines.json
+  models/          fl_head_base|small|deep.tflite (pretrained on MAFAULDA)
+app/src/test/      171 JVM tests: protocol, FedAvg, promotion, calibration maths, rules engine,
+                   sample store, recovery, failover, LAN discovery picker, auto-join planner
+ml/                Python: MAFAULDA ingest, pretraining, head export, network simulator, field ingest
+plans/             one contract per goal, each ending with a verified Result section
+tools/             reset-phones.sh, devtestN/REPORT.md evidence
+docs/              architecture.svg, network-flow.svg, the original 10 Sep status document
 ```
 
 ## Building
 
-Requirements: Android Studio Ladybug or newer, Android Gradle Plugin 8.7, JDK 17,
-Android SDK 35.
+Requirements: JDK 17, Android SDK 35 (platform-tools, `platforms;android-35`, build-tools 35.x),
+the Gradle wrapper in the repo. Write `local.properties` with `sdk.dir=<path>`.
 
 ```bash
-gradle wrapper --gradle-version 8.11.1   # first checkout only
-./gradlew :app:assembleDebug
-./gradlew :app:installDebug
+export JAVA_HOME=/path/to/jdk17; export PATH="$JAVA_HOME/bin:$PATH"
+./gradlew :app:assembleDebug :app:testDebugUnitTest
 ```
 
-With no model files present the application runs on the anomaly-scoring path.
+The debug APK is `app/build/outputs/apk/debug/app-debug.apk`, package `com.jugaad.agent.debug`.
+Python (3.12, TensorFlow 2.16.1) is only needed to re-bake the heads or run the simulator; see
+`ml/README.md` and `ml/fl/README.md`.
 
-## Enabling the optional runtimes
+Optional runtimes behind `gradle.properties` flags: `jugaad.executorch.enabled` (an ExecuTorch CNN
+path with QNN/XNNPACK backends, kept from the first prototype) and `jugaad.gemma.enabled` (Gemma
+advice through MediaPipe). Both are off; the shipped path is LiteRT plus the template advisor.
 
-1. Train and export the models as described in [`ml/README.md`](ml/README.md).
-2. Place the artifacts in `app/src/main/assets/models/`:
-   `fault_cnn_xnnpack.pte`, `fault_cnn_qnn.pte`, `gemma3-1b-it-int4.task`.
-3. In `gradle.properties`, set `jugaad.executorch.enabled=true` and
-   `jugaad.gemma.enabled=true`. This also links the `executorch-android` and
-   `tasks-genai` dependencies.
-4. Rebuild. On start-up the log tag `JUGAAD` reports which backend loaded.
-
-## Testing
+## Running on the phones
 
 ```bash
-./gradlew :app:testDebugUnitTest
+adb tcpip 5555 && adb connect <phone-ip>:5555        # once per phone, then wireless
+bash tools/reset-phones.sh --keep-equipment            # wipe learning data, reinstall, relaunch
+adb -s <serial> logcat -s JUGAAD:*                     # proof lines
 ```
 
-`LogMelSpectrogramTest` validates the front end against
-`ml/logmel_reference.py`; JTransforms is pure Java, so the transform runs
-unchanged on the JVM. `AnomalyScorerTest` covers baseline construction, the
-spread lower bound, and threshold bucketing.
+Demo in one line: on one phone open Federated network, Devices, tap "Serve as owner"; watch the
+other phones report "Joined <name>" and the owner count "3 active devices". Full run sheet in
+`DEMO.md`, deeper mechanics and proof lines in `FEDERATED.md`.
+
+## Documentation map
+
+| File | What it is |
+|---|---|
+| `CONTEXT.md` | How to continue the project in a fresh Claude session: rules, toolchain, phones, code map |
+| `HANDOFF.md` | Current state, what was verified on hardware, open items |
+| `FEDERATED.md` | The federated system in depth: model choice, strategies, protocol, run sheet, proof lines |
+| `ARCHITECTURE.md` | End-to-end architecture snapshot with file references |
+| `DEMO.md` | Demo run sheet and talking points |
+| `HACKATHON.md` | Provenance rule, judging plan |
+| `plans/` | Contracts v1 to v6 with verified Result sections |
+| `ml/data/DATASETS.md` | Public dataset survey and why MAFAULDA |
+| `docs/PROJECT_STATE.md` | The original 10 Sep status document (superseded by HANDOFF.md) |
 
 ## Status
 
-Pre-release, under active development. The codebase has not yet been compiled
-against the Android SDK; minor adjustments are expected on the first build.
+Verified on hardware on 2026-09-12: sensors and calibration, catalogue diagnosis, on-device
+training with promotion, three-phone federated rounds over WiFi Direct and over the WiFi LAN,
+automatic discovery and joining by node name, failover, recovery, the bench guard and the
+Humane Minimalist Dark UI. Open: the v5.1 UI fixes are covered by tests but their on-device
+re-check was cut short, Airflow Obstruction has no public labelled data (learnt from technician
+labels), and phones on an access point with client isolation must use WiFi Direct.

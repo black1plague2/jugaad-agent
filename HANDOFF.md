@@ -6,7 +6,7 @@ reference measurement, and three (or more) phones train and merge fault models o
 with no cloud. This file supersedes the original 10 Sep handoff; the plans in `plans/` are the
 binding contracts and each ends with a "Result" section of verified facts.
 
-## What exists (all uncommitted on top of commit `0b6ab1d`)
+## What exists (committed and pushed to `black1plague2/jugaad-agent`, branch `main`)
 
 | Layer | State |
 |---|---|
@@ -16,8 +16,8 @@ binding contracts and each ends with a "Result" section of verified facts.
 | Learning | LiteRT 2.16.1 on-device training; 8 strategies (base, small, deep, noise, balanced, uncertain, distill, centroid) with early stopping, weight decay, held-out split, overfit gap; heads pretrained offline on MAFAULDA (`ml/data/README.md`) |
 | Network | WiFi Direct group or plain WiFi LAN (owner advertised by node name over mDNS, `LanDiscovery`), protocol v2 framing; per-variant FedAvg with accept-guard; champion/challenger promotion (>= 3 pts, 2 rounds); node registry, standings, events, policy replication; peer sample exchange into a shared pool; failover and watchdog; retries with backoff |
 | Config | every tunable in `assets/config/app_config.json` (defaults -> device overrides -> owner policy) |
-| Self-healing | startup repair of corrupt JSON / stale weights, role restore, retries, failover, watchdog worker |
-| UI | Humane Minimalist Dark (Stitch-inspired): bundled Work Sans, `#07080A` canvas, single crimson accent; equipment flow (list, create with machine-type search and bench flag, detail with calibration, pre-check, reference, reading, result with spectrogram heatmap and issues, history) and a federated shell with Network / Devices / Sync / Performance + Group settings; every Stitch heatmap placeholder is a real heatmap |
+| Self-healing | startup repair of corrupt JSON / stale weights, role restore, retries, failover, watchdog worker; auto-join (`AutoJoin`) re-syncs to whichever owner is advertised, every 60 s |
+| UI | Humane Minimalist Dark (Stitch-inspired): bundled Work Sans, `#07080A` canvas, single crimson accent; equipment flow (list, create with machine-type search and bench flag, detail with calibration, pre-check, reference, reading, result with spectrogram heatmap and issues, history) and a federated shell with Network / Devices (auto-join state, Nearby on this WiFi, Serve as owner) / Sync / Performance + Group settings; every Stitch heatmap placeholder is a real heatmap |
 | Guard | "Bench / test equipment" flag stops readings from becoming training, sharing or calibration data; `tools/reset-phones.sh` wipes phones before demos |
 
 ## Verified on hardware (three iQOO 15, Android 16, SM8850)

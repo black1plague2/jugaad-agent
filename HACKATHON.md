@@ -87,11 +87,12 @@ Creative phone use (15%) + Office Kit usage (10%).
 - [ ] Time the full "Healthy → introduce fault → Critical" segment. It's ~25–30 s,
       not "<10 s". Narrate accordingly.
 - [ ] Fallback tree, all already implemented — confirm each on device:
-      QNN fail → XNNPACK → Heuristic; Gemma fail/timeout → TemplateAdvisor;
-      no baseline → hard block; Office Kit fail → run on the phone screen.
+      LiteRT head fail → Heuristic; Gemma off → TemplateAdvisor; no reference → hard block;
+      no owner on WiFi → WiFi Direct group; owner gone → next node serves; Office Kit fail →
+      run on the phone screen.
 - [ ] Pre-grant mic + camera before you present.
-- [ ] `adb logcat -s JUGAAD:* ExecuTorch:* Qnn:*` piped to a visible terminal for
-      the NPU proof — only show it if QNN actually loaded.
+- [ ] `adb logcat -s JUGAAD:*` piped to a visible terminal for the proof lines
+      (`lan: advertising`, `auto-join: syncing with`, `fl sync: owner N node(s) merged`).
 
 ---
 
