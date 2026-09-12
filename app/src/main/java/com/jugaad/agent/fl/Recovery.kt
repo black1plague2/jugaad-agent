@@ -5,6 +5,8 @@ import com.jugaad.agent.core.Logx
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import java.io.File
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 /**
  * Startup self-healing (v4 plan §4, "self-healing nodes"): every JSON file directly
@@ -15,8 +17,9 @@ import java.io.File
  * file it looks for is missing, so quarantining the bad file is enough to let the
  * normal load-or-default path recreate it on next access. Weight files
  * (`weights_<id>.bin`) whose byte length doesn't match any [FlVariants] variant's
- * weight count are renamed to `<name>.stale` so a truncated/mismatched export can't be
- * loaded into the wrong-shaped graph.
+ * weight count, or that contain a non-finite float (NaN/Infinity, e.g. from a FedAvg
+ * round merged before the totalN <= 0 guard existed), are renamed to `<name>.stale` so
+ * a truncated/mismatched/poisoned export can't be loaded into the graph.
  */
 object Recovery {
     data class Report(val repairedFiles: List<String>, val staleWeights: List<String>)
@@ -71,7 +74,22 @@ object Recovery {
         val len = f.length()
         val floats = if (len > 0 && len % 4L == 0L) (len / 4L).toInt() else -1
         val matchesKnownVariant = floats >= 0 && FlVariants.ALL.any { it.weightCount == floats }
-        return if (matchesKnownVariant) null else quarantine(f, null, "stale")
+        if (!matchesKnownVariant) return quarantine(f, null, "stale")
+        // Right length alone isn't enough: an all-NaN merge from before the FedAvg totalN <= 0
+        // guard produces a file of the correct length that would otherwise pass as healthy.
+        if (hasNonFiniteFloat(f, floats)) return quarantine(f, null, "stale")
+        return null
+    }
+
+    /** Reads [floats] little-endian floats from [f] (matching [WeightsCodec]'s encoding),
+     * stopping at the first non-finite value. */
+    private fun hasNonFiniteFloat(f: File, floats: Int): Boolean {
+        val bytes = runCatching { f.readBytes() }.getOrNull() ?: return false
+        val buf = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
+        repeat(floats) {
+            if (!buf.getFloat().isFinite()) return true
+        }
+        return false
     }
 
     /** Renames [f] aside as `<name>.corrupt-<ts>` (or `<name>.stale` when [ts] is null). */

@@ -104,6 +104,11 @@ class DiagnoseUseCase(
             }.getOrNull()
         } else null
         val pred = if (anomaly.status != MachineStatus.HEALTHY) rawPred else null
+        // A non-finite confidence means the prediction itself is untrustworthy (e.g. a still-
+        // poisoned FL head): drop the fault class along with it rather than persist a label
+        // paired with a fabricated confidence. kotlinx.serialization throws saving a NaN/Infinity
+        // JSON number, and `pred?.confidence ?: 0f` alone never catches it since NaN != null.
+        val safePred = sanitizePrediction(pred)
 
         // --- Rule-engine issue suggestions (should-have) ------------------------
         // Evidence is cheap and pure to compute either way; only expose suggestions
@@ -151,8 +156,8 @@ class DiagnoseUseCase(
             dominantHz = dominantHz,
             dominantSource = anomaly.dominantSource,
             sensorScore = anomaly.sensorScore,
-            faultClass = pred?.faultClass,
-            faultConfidence = pred?.confidence ?: 0f,
+            faultClass = safePred?.faultClass,
+            faultConfidence = safePred?.confidence ?: 0f,
             backend = pred?.backend ?: com.jugaad.agent.domain.model.InferenceBackend.NONE,
             inferenceMs = pred?.inferenceMs ?: 0L,
             issues = issues,
@@ -186,5 +191,16 @@ class DiagnoseUseCase(
         }
 
         return Outcome.Ok(Result(saved, a.logMel))
+    }
+
+    companion object {
+        /**
+         * Drops a prediction whose confidence is non-finite (NaN/Infinity) so it never reaches
+         * a persisted [Diagnosis]. Pulled out as its own function (rather than inlined at the
+         * call site) so the guard is exercisable in a JVM unit test independent of the rest of
+         * [run], which needs a real [CaptureCoordinator] (AudioRecord/SensorManager) to execute.
+         */
+        internal fun sanitizePrediction(pred: FaultClassifier.Prediction?): FaultClassifier.Prediction? =
+            pred?.takeIf { it.confidence.isFinite() }
     }
 }

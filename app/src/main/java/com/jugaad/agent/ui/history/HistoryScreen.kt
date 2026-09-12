@@ -39,6 +39,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.jugaad.agent.di.ServiceLocator
 import com.jugaad.agent.domain.model.Diagnosis
+import com.jugaad.agent.domain.model.FaultClass
 import com.jugaad.agent.ui.common.SpectrogramImage
 import com.jugaad.agent.ui.common.fiori.FioriColors
 import com.jugaad.agent.ui.common.fiori.FioriEmptyState
@@ -139,7 +140,11 @@ private fun HistoryRow(assetId: String, diagnosis: Diagnosis, onClick: () -> Uni
             Text(
                 buildString {
                     append("score %.2f".format(diagnosis.anomalyScore))
-                    diagnosis.faultClass?.let { append("  ·  ${it.label}") }
+                    // Skip FaultClass.HEALTHY: it is classifier class 0, not a fault, and a row
+                    // reading "score 4.46 . Healthy" beside a Critical chip contradicts itself.
+                    diagnosis.faultClass
+                        ?.takeIf { it != FaultClass.HEALTHY }
+                        ?.let { append("  ·  ${it.label}") }
                 },
                 color = FioriColors.TextSecondary,
                 style = MaterialTheme.typography.bodyMedium,

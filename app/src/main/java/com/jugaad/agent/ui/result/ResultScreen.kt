@@ -121,8 +121,22 @@ fun ResultScreen(
                 Text("Details", color = FioriColors.TextPrimary, fontWeight = FontWeight.SemiBold)
                 MetricRow("Status", d.status.label)
                 if (d.status != MachineStatus.HEALTHY) {
-                    d.faultClass?.let {
-                        MetricRow("CNN fault class", "${it.label}  (${"%.1f".format(d.faultConfidence * 100)}%)")
+                    // FaultClass.HEALTHY is class 0 of the classifier, not a fault. Printing it
+                    // here read as "CNN fault class: Healthy (100.0%)" directly under a Critical
+                    // status, which invites the technician to dismiss a real alarm. A model that
+                    // says "healthy" about a non-healthy reading has identified no fault, so say
+                    // exactly that instead of naming a class.
+                    val fc = d.faultClass
+                    if (fc == null || fc == FaultClass.HEALTHY) {
+                        MetricRow("CNN fault class", "no specific fault identified")
+                    } else {
+                        val confidence = d.faultConfidence
+                        val confidenceLabel = if (confidence.isFinite() && confidence > 0f) {
+                            "%.1f".format(confidence * 100) + "%"
+                        } else {
+                            "no confidence score"
+                        }
+                        MetricRow("CNN fault class", "${fc.label}  ($confidenceLabel)")
                     }
                 }
                 MetricRow("Cosine distance", "%.4f".format(d.cosineDistance))

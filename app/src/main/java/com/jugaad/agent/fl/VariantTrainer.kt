@@ -17,6 +17,17 @@ import kotlin.random.Random
 private const val CE_PROB_FLOOR = 1e-7f
 
 /**
+ * True when every labelled sample in [trainSamples] shares the same class (D4): a cheap,
+ * pure check so it can be exercised without a [FlModel] or [ConfigStore]. An empty list isn't
+ * "degenerate", it's just nothing to train on yet, so it reports false.
+ */
+internal fun isSingleClassTrainingSet(trainSamples: List<FlSample>): Boolean {
+    if (trainSamples.isEmpty()) return false
+    val firstLabel = trainSamples.first().label
+    return trainSamples.all { it.label == firstLabel }
+}
+
+/**
  * Owns one MLP [VariantSpec]'s weight lifecycle on this phone: load-or-init on startup,
  * local SGD training on labelled (and, for `distill`, teacher-confident pending) samples
  * per the variant's recipe with early stopping, held-out evaluation, and applying a
@@ -64,6 +75,19 @@ class VariantTrainer(
         val trainSamples = samples.trainSplit()
         if (trainSamples.isEmpty()) return@withContext _metrics.value
         val valSamples = samples.valSplit()
+
+        // Degenerate single-class training set (D4): every label the same means trainAcc=1.0
+        // for a model that only ever answers that one class, which reads as a real result on
+        // the Sync/Performance tabs. We don't own VariantMetrics.kt to add a dedicated field,
+        // and the founder is mid-way through collecting a second class so training must not be
+        // blocked outright — so we surface it as a loud warning log alongside the metrics line
+        // already emitted below, rather than silently reporting the 1.0.
+        if (isSingleClassTrainingSet(trainSamples)) {
+            Logx.w(
+                "fl train[${spec.id}]: single-class training set (label=${trainSamples.first().label}, " +
+                    "n=${trainSamples.size}) - trainAcc is not a meaningful signal until a second class is labelled",
+            )
+        }
 
         val t0 = System.currentTimeMillis()
         val useEarlyStop = valSamples.size >= cfg.training.minVal

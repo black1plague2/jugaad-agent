@@ -44,8 +44,11 @@ The technician registers a machine, captures a short healthy reference
 Critical** condition, an optional fault class, and a one-sentence recommended
 action in plain language.
 
-- **Fully offline.** No `INTERNET` permission. Capture, feature extraction,
-  anomaly scoring, the classifier and the language model all run on the device.
+- **Fully offline.** No server, no cloud account and no outbound traffic: capture, feature
+  extraction, anomaly scoring, the classifier and the language model all run on the device, and
+  the only packets that leave a phone go to another phone. The `INTERNET` permission is declared,
+  because Android gates every socket on it including a local one, and the phone to phone sync
+  needs TCP on port 8988; the app runs with WiFi Direct in airplane mode.
 - **No training data required.** Each asset is characterised from its own
   12-second healthy baseline; the primary decision path is unsupervised.
 - **Two sensors, one window.** Microphone (44.1 kHz, `UNPROCESSED`) and
@@ -145,7 +148,7 @@ Everything is written. Nothing is verified against a real toolchain or device.
 
 | Area | Status | Notes |
 |---|---|---|
-| Gradle project, manifest, dark theme, icon | drafted | No `INTERNET` permission by design. Wrapper not generated. |
+| Gradle project, manifest, dark theme, icon | drafted | `INTERNET` is declared only so Android allows the phone to phone socket; no outbound traffic. Wrapper not generated. |
 | Sensor capture (audio + IMU + coordinator) | drafted | UNPROCESSED with VOICE_RECOGNITION fallback; IMU rate measured, delivered on a HandlerThread. |
 | Log-mel front-end + IMU index | drafted | JTransforms FFT. Python parity reference exists; numerical match not yet checked. |
 | Anomaly score + thresholds **(must-have path)** | drafted | Zero ML dependencies. Runs on device with no model files. |

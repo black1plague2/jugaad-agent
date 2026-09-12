@@ -101,6 +101,9 @@ Creative phone use (15%) + Office Kit usage (10%).
 1. Impact first: SME rotating equipment, no CapEx, no cloud, no training data.
 2. One phone = two sensors fused over the same 3 s (mic + accelerometer).
 3. Live: baseline → healthy → inject fault → Critical + one-sentence advice.
-4. Offline proof: grep the merged manifest for `INTERNET` (absent).
+4. Offline proof: put the phones in airplane mode with WiFi Direct and run the whole demo, or
+   watch that no request leaves the device. Do not claim `INTERNET` is absent from the manifest:
+   it is declared, because Android gates even a local socket on it and the phone to phone sync
+   needs one.
 5. On-device AI: backend chip = `NPU · QNN` / `CPU · XNNPACK`; logcat proof.
 6. Roadmap: multi-machine fleet view, trend history, more fault classes.

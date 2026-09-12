@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -229,8 +230,24 @@ fun AssetDetailScreen(
                 CalibrateSection(vm, a.thresholds.t1, a.thresholds.t2)
             }
 
-            TextButton(onClick = { vm.deleteAsset(onDeleted) }, modifier = Modifier.fillMaxWidth()) {
+            var showDeleteConfirm by remember { mutableStateOf(false) }
+            TextButton(onClick = { showDeleteConfirm = true }, modifier = Modifier.fillMaxWidth()) {
                 Text("Delete equipment", color = FioriColors.Negative)
+            }
+            if (showDeleteConfirm) {
+                AlertDialog(
+                    onDismissRequest = { showDeleteConfirm = false },
+                    title = { Text("Delete ${a.name}") },
+                    text = { Text("This removes ${a.name} and all of its measurement history. This cannot be undone.") },
+                    confirmButton = {
+                        TextButton(onClick = { showDeleteConfirm = false; vm.deleteAsset(onDeleted) }) {
+                            Text("Delete", color = FioriColors.Negative)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
+                    },
+                )
             }
             Box(Modifier.height(8.dp))
         }

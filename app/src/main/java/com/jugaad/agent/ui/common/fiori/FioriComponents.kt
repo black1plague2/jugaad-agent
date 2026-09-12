@@ -24,6 +24,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
 /** KPI tile: a raised 16 dp card with a secondary label above a headline value. */
@@ -147,12 +148,23 @@ fun FioriKeyValueRow(key: String, value: String, valueSemantic: Semantic? = null
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(key, color = FioriColors.TextSecondary, style = MaterialTheme.typography.bodyMedium)
+        // Weighted so a long value (e.g. a full event sentence) wraps instead of pushing into
+        // or overlapping the key; short values still hug the right edge as before.
+        Text(
+            key,
+            color = FioriColors.TextSecondary,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f),
+        )
         Text(
             value,
             color = valueSemantic?.let { FioriColors.of(it) } ?: FioriColors.TextPrimary,
             style = MaterialTheme.typography.bodyLarge,
             fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.End,
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1.5f),
         )
     }
 }

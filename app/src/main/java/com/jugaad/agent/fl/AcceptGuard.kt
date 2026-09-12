@@ -12,6 +12,15 @@ import com.jugaad.agent.core.config.AppConfig
 object AcceptGuard {
     fun accept(nTrain: Int, before: Float, after: Float, cfg: AppConfig): Boolean {
         val guard = cfg.acceptGuard
-        return nTrain < guard.minTrain || after >= before - guard.maxDrop.toFloat()
+        if (nTrain < guard.minTrain) return true
+        // `before`/`after` are -1 (the "no held-out data" sentinel from evaluateVal, e.g. when
+        // nVal < training.minVal) or otherwise non-finite when there is no real accuracy to
+        // compare. `-1f >= -1f - maxDrop` is true by accident (D3): a sentinel vs. sentinel
+        // comparison must not silently read as "accuracy held up". With no evidence either way,
+        // and the founder mid-collection of new classes, we choose to accept rather than stall
+        // every merge until held-out data exists — mirroring the nTrain-too-low branch above,
+        // where there's nothing measured yet worth protecting.
+        if (before < 0f || after < 0f || !before.isFinite() || !after.isFinite()) return true
+        return after >= before - guard.maxDrop.toFloat()
     }
 }

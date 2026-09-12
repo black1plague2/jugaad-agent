@@ -90,7 +90,22 @@ fun GroupSettingsScreen(onBack: () -> Unit) {
             IdentitySection(ui, vm)
             ConfigurationSection(ui, onResetOverrides = { vm.resetConfigOverrides() })
             ResilienceSection(ui, vm)
-            GhostButton(text = "Leave group", onClick = { vm.removeGroup() }, modifier = Modifier.fillMaxWidth())
+
+            var showLeaveConfirm by remember { mutableStateOf(false) }
+            GhostButton(text = "Leave group", onClick = { showLeaveConfirm = true }, modifier = Modifier.fillMaxWidth())
+            if (showLeaveConfirm) {
+                AlertDialog(
+                    onDismissRequest = { showLeaveConfirm = false },
+                    title = { Text("Leave group") },
+                    text = { Text("This device disconnects from the group and stops syncing with it.") },
+                    confirmButton = {
+                        TextButton(onClick = { showLeaveConfirm = false; vm.removeGroup() }) { Text("Leave") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showLeaveConfirm = false }) { Text("Cancel") }
+                    },
+                )
+            }
         }
     }
 }
@@ -170,10 +185,24 @@ private fun IdentitySection(ui: NetworkUiState, vm: NetworkViewModel) {
  * by section and collapsed by default - unchanged from the old NetworkScreen. */
 @Composable
 private fun ConfigurationSection(ui: NetworkUiState, onResetOverrides: () -> Unit) {
+    var showResetConfirm by remember { mutableStateOf(false) }
     FioriSectionHeader(
         "Configuration",
-        action = { TextButton(onClick = onResetOverrides) { Text("Reset device overrides") } },
+        action = { TextButton(onClick = { showResetConfirm = true }) { Text("Reset device overrides") } },
     )
+    if (showResetConfirm) {
+        AlertDialog(
+            onDismissRequest = { showResetConfirm = false },
+            title = { Text("Reset device overrides") },
+            text = { Text("This clears every configuration key you have overridden on this device, back to the group defaults.") },
+            confirmButton = {
+                TextButton(onClick = { showResetConfirm = false; onResetOverrides() }) { Text("Reset") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetConfirm = false }) { Text("Cancel") }
+            },
+        )
+    }
     val cfg = ui.appConfig
     if (cfg == null) {
         FioriEmptyState("Configuration not loaded", "The device configuration has not finished loading yet.")

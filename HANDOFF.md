@@ -119,6 +119,25 @@ Python (`ml/.venv`, TF 2.16.1): `ml/fl/export_fl_head.py` (bake heads), `pretrai
   exemption on the owner (`dumpsys deviceidle whitelist +com.jugaad.agent.debug`); it was not
   applied, since it is a device setting and every verified pass here ran with screens on.
 
+- v10 end-to-end hardening (13 Sep, 02:4x-02:5x): a full sweep of app, training and UI against
+  phones carrying the real coffee-machine capture, with nothing purged. Found and fixed: the node
+  registry counted one phone six times (8 entries, 3 distinct deviceIds) because `sessions` in
+  `FedAvgCoordinator` was never deduplicated by deviceId, which also meant that phone's weights
+  were FedAvg'd in six times; both accept-guard call sites carried a hardcoded copy of the guard
+  and never called `AcceptGuard`; the guard itself accepted every merge when `valAcc` was the -1
+  sentinel; nothing detected degenerate single-class training; Delete equipment, Leave group and
+  Reset device overrides had no confirmation; seven `arguments!!` force-unwraps in the nav graph;
+  the equipment list status chip never refreshed and its write could drop entries; and the Result
+  and History screens presented `FaultClass.HEALTHY` as a finding, so a Critical reading displayed
+  "CNN fault class: Healthy (100.0%)" and "score 4.46 . Healthy". 188 JVM tests, APK
+  `0608b2f46172836b` on all three phones via `install -r`, data untouched. Registry now reads 3
+  entries and the UI "3 active devices"; the zero-sample guard logs
+  `fl sync: skipping base, no trained samples this round` and leaves the round counters at 0.
+  A stratified train/validation split was tried and deliberately reverted: it made split membership
+  depend on the size of the set being split, which broke FedAvg exactness under pooling
+  (`CentroidMathTest.fedAvgOfTwoCentroidsWeightedByNTrainEqualsThePooledMean` caught it). Plan and
+  full evidence: `plans/2026-09-13-v10-end-to-end-hardening.md`.
+
 ## Rules that must hold
 
 - Never train, share or calibrate on readings taken with the phones on a table or on synthetic

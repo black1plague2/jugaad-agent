@@ -1,6 +1,7 @@
 package com.jugaad.agent.fl
 
 import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Test
 
@@ -12,7 +13,7 @@ class FedAvgTest {
         val b = floatArrayOf(4f, 20f) to 3
         // (0*1 + 4*3)/4 = 3.0 ; (10*1 + 20*3)/4 = 17.5
         val merged = FedAvg.merge(listOf(a, b))
-        assertArrayEquals(floatArrayOf(3f, 17.5f), merged, 1e-6f)
+        assertArrayEquals(floatArrayOf(3f, 17.5f), requireNotNull(merged), 1e-6f)
     }
 
     @Test
@@ -27,5 +28,14 @@ class FedAvgTest {
         assertThrows(IllegalArgumentException::class.java) {
             FedAvg.merge(listOf(floatArrayOf(1f, 2f) to 1, floatArrayOf(1f) to 1))
         }
+    }
+
+    @Test
+    fun zeroTotalSamplesReturnsNullInsteadOfNaN() {
+        // Every contributor's nTrain is 0 (no equipment has ever trained a sample): totalN is 0,
+        // so n/totalN would be 0f/0f == NaN for every element. merge must report nothing merged.
+        val a = floatArrayOf(1f, 2f) to 0
+        val b = floatArrayOf(3f, 4f) to 0
+        assertNull(FedAvg.merge(listOf(a, b)))
     }
 }
