@@ -245,6 +245,26 @@ clusters away from the origin removed it.
 
 Live relevance: the fleet has only class 0 samples, so the ROTOR_IMBALANCE and AIRFLOW_OBSTRUCTION
 centroids are both all-zero right now. It only reaches a user while `centroid` is champion, and the
-champion is `base`, but promotion can select `centroid`. Left unfixed because masking untrained
-classes changes model semantics, which is the founder's call; the fix is to exclude classes with no
-training history from `predict` and `classify` rather than let the origin act as a magnet.
+champion is `base`, but promotion can select `centroid`.
+
+**FIXED.** Returning a class that has seen zero examples is wrong under any reading, so this did
+not need a semantics debate. `CentroidStrategy` now carries a `trainedMask` over `N_CLASSES`;
+`predict` skips untrained classes and `classify` gives them `Float.NEGATIVE_INFINITY` logits, so
+they hold no probability mass and can never be the argmax. With nothing trained yet `classify`
+returns all zeros and `predict` returns -1, which is safe: `predict` is private and only feeds the
+confusion matrix and the accuracy count, and the public `infer` path cannot surface an untrained
+class at all.
+
+Two details worth keeping. Inferring "trained" from "the centroid is non-zero" was tried first and
+rejected: it broke `CentroidMathTest.inferIsSoftmaxOverNegativeScaledSquaredDistance`, where a
+class legitimately trains to an exact all-zero mean. So the mask is real state, persisted through
+the existing `WeightsCodec` as `trained_<id>.bin` beside the weights, with no new storage
+mechanism. For merged peer weights, `applyMerged` marks a class trained when its merged centroid
+is non-zero, which is sound because `FedAvg.merge` only writes a non-zero result into a class slot
+when some contributor had `nTrain > 0` for it.
+
+194 JVM tests, 0 failures, with `CentroidMathTest` and `TwoClassLearningIntegrationTest` passing
+unchanged. APK `22b407f044f01379` installed on all three phones with `install -r`; no crash, and
+equipment, history and samples all still in place (A 8/8/8, B 3/16/7, C 1/3/3). The
+`trained_<id>.bin` files appear at the next centroid training round; until then every class reads
+untrained, which is the safe direction.
