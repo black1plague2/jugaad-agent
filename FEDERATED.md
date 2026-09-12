@@ -249,13 +249,16 @@ stability; their tokens are the Humane palette.
    equipment detail screen so Warning/Critical thresholds match this machine.
 3. Open Federated network. On the Training tab, Train now (or wait for Auto-train). Note each node's
    challenger.
-4. Phone A: Create group, then Start sync service. Every other phone: Discover, Connect to A (rows
-   show name plus MAC suffix), accept the one-time dialog on A.
-5. Every client: Sync now. The Network tab on all phones now shows the same round, the node list,
-   and the leaderboard with network scores.
+4. Same WiFi: on phone A open Devices and tap Serve as owner. Every other phone lists A under
+   "Nearby on this WiFi" and joins it by itself within seconds ("Joined <name>, next sync in
+   N s"), then re-syncs every 60 s. Without a router: Create group on A, Start sync service, then
+   Discover, Connect on the others and accept the one-time dialog on A.
+5. The Network tab on all phones now shows the same round, the node list by name, and the
+   leaderboard with network scores. Sync now forces a round at any time.
 6. Keep labelling and training. Each sync re-scores the challengers; a Candidate 2/2 becomes the
    champion on the next win, the Activity list shows `PROMOTE`, and every phone's classifier switches.
-7. To add a phone later: install, Discover, Connect, Sync now. The owner assigns it a challenger.
+7. To add a phone later: install and open the app on the same WiFi; it joins on its own. On WiFi
+   Direct: Discover, Connect, Sync now. The owner assigns it a challenger.
 
 ## Proof lines
 

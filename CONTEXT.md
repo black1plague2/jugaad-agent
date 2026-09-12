@@ -111,7 +111,7 @@ ls files/fl` (`samples.jsonl`, `shared_samples.jsonl`, `node.json`, `network.jso
 weights), `files/assets/<id>/` (equipment, baseline, `calibration.json`). Evidence from past passes lives in `tools/devtestN/REPORT.md`; the PNGs
 are not committed.
 
-## Where things stand (2026-09-12, 18:2x IST)
+## Where things stand (2026-09-12, 22:2x IST)
 
 - v1 to v7 are implemented and built: APK sha256 prefix `4f255d832ddaace1`, 171/171 JVM tests. All
   three phones run it on a wiped learning state (node names regenerate as `I2501-xxxx`; rename
@@ -150,7 +150,8 @@ are not committed.
     uncertain, distill, centroid), `VariantTrainer`, early stopping, held-out split, promotion
     (champion/challenger), `StrategyRank`, `Cohorts`, `TrainBudget`, `Recovery` (startup repair
     of corrupt JSON and stale weights), `SharedPool` (peer sample exchange), `AutoTrainer`.
-  - `p2p/` WiFi Direct (`WifiDirectManager`), TCP protocol v2 (`SyncProtocol`, port 8988,
+  - `p2p/` WiFi Direct (`WifiDirectManager`), `LanDiscovery` (mDNS by node name), `AutoJoin`
+    (process-wide loop that syncs to the advertised owner), TCP protocol v2 (`SyncProtocol`, port 8988,
     "JGFL" framing), `FedAvgCoordinator` with accept guard, `SyncNow` (client sync with retries
     and backoff), `Failover`, `FlSyncService` (owner foreground service, wake and WiFi locks),
     `SyncWorker`/`SyncScheduler` (WorkManager watchdog), `SyncBus` (UI state).

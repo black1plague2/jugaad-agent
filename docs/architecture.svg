@@ -1,0 +1,120 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 620" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#444"/>
+    </marker>
+    <style>
+      .box{fill:#f6f7f9;stroke:#3a3f47;stroke-width:1.2;rx:8}
+      .acc{fill:#fdecec;stroke:#c30000;stroke-width:1.4;rx:8}
+      .grp{fill:none;stroke:#9aa0a8;stroke-width:1;stroke-dasharray:5 4;rx:12}
+      .t{fill:#1a1d21}
+      .h{fill:#1a1d21;font-weight:600;font-size:14px}
+      .s{fill:#5b6370;font-size:11.5px}
+      .g{fill:#5b6370;font-size:12px;font-style:italic}
+      .l{stroke:#444;stroke-width:1.3;fill:none;marker-end:url(#a)}
+    </style>
+  </defs>
+  <rect width="1000" height="620" fill="#ffffff"/>
+  <text x="20" y="28" class="h" font-size="18">Jugaad Agent, on-device architecture (one phone)</text>
+  <text x="20" y="46" class="s">Everything below runs on the phone. No cloud. Peers exchange model weights only over WiFi Direct or the local WiFi network.</text>
+
+  <!-- Sensing column -->
+  <rect x="20" y="70" width="200" height="240" class="grp"/>
+  <text x="32" y="90" class="g">sensor/  ml/signal/</text>
+  <rect x="32" y="100" width="176" height="60" class="box"/>
+  <text x="44" y="120" class="h">Capture (3 s clip)</text>
+  <text x="44" y="138" class="s">mic 44.1 kHz, accelerometer,</text>
+  <text x="44" y="152" class="s">gyroscope, magnetometer</text>
+  <rect x="32" y="176" width="176" height="60" class="box"/>
+  <text x="44" y="196" class="h">Features (260-d)</text>
+  <text x="44" y="214" class="s">256 log-mel stats + 4 sensor</text>
+  <text x="44" y="228" class="s">indices, relative to the reference</text>
+  <rect x="32" y="252" width="176" height="48" class="box"/>
+  <text x="44" y="272" class="h">Reference measurement</text>
+  <text x="44" y="290" class="s">per machine, refreshed on drift</text>
+  <path d="M120,160 L120,176" class="l"/>
+  <path d="M120,236 L120,252" class="l"/>
+
+  <!-- Decision column -->
+  <rect x="250" y="70" width="230" height="240" class="grp"/>
+  <text x="262" y="90" class="g">ml/anomaly/  ml/diagnosis/  ml/advisor/</text>
+  <rect x="262" y="100" width="206" height="60" class="box"/>
+  <text x="274" y="120" class="h">Anomaly score</text>
+  <text x="274" y="138" class="s">cosine distance + per-sensor z-scores</text>
+  <text x="274" y="152" class="s">adaptive T1/T2 (median, MAD)</text>
+  <rect x="262" y="176" width="206" height="60" class="box"/>
+  <text x="274" y="196" class="h">Likely issues</text>
+  <text x="274" y="214" class="s">catalogue: 13 machine types, 58 faults,</text>
+  <text x="274" y="228" class="s">17 evidence metrics, rules engine</text>
+  <rect x="262" y="252" width="206" height="48" class="box"/>
+  <text x="274" y="272" class="h">Advice + notification proposal</text>
+  <text x="274" y="290" class="s">template advisor (Gemma optional)</text>
+  <path d="M208,130 L262,130" class="l"/>
+  <path d="M365,160 L365,176" class="l"/>
+  <path d="M365,236 L365,252" class="l"/>
+
+  <!-- Learning column -->
+  <rect x="510" y="70" width="230" height="240" class="grp"/>
+  <text x="522" y="90" class="g">fl/  ml/classifier/</text>
+  <rect x="522" y="100" width="206" height="60" class="acc"/>
+  <text x="534" y="120" class="h">Fault classifier (LiteRT head)</text>
+  <text x="534" y="138" class="s">champion variant, on-device training</text>
+  <text x="534" y="152" class="s">healthy / rotor imbalance / airflow</text>
+  <rect x="522" y="176" width="206" height="60" class="box"/>
+  <text x="534" y="196" class="h">FL runtime, 8 strategies</text>
+  <text x="534" y="214" class="s">base, small, deep, noise, balanced,</text>
+  <text x="534" y="228" class="s">uncertain, distill, centroid</text>
+  <rect x="522" y="252" width="206" height="48" class="box"/>
+  <text x="534" y="272" class="h">Sample store + shared pool</text>
+  <text x="534" y="290" class="s">labels, held-out split, peer samples</text>
+  <path d="M468,130 L522,130" class="l"/>
+  <path d="M625,176 L625,160" class="l"/>
+  <path d="M625,252 L625,236" class="l"/>
+
+  <!-- Network column -->
+  <rect x="770" y="70" width="210" height="240" class="grp"/>
+  <text x="782" y="90" class="g">p2p/</text>
+  <rect x="782" y="100" width="186" height="60" class="box"/>
+  <text x="794" y="120" class="h">Discovery</text>
+  <text x="794" y="138" class="s">WiFi LAN: mDNS by node name</text>
+  <text x="794" y="152" class="s">WiFi Direct: group owner</text>
+  <rect x="782" y="176" width="186" height="60" class="acc"/>
+  <text x="794" y="196" class="h">Auto-join + FedAvg</text>
+  <text x="794" y="214" class="s">TCP 8988, protocol v2, accept guard,</text>
+  <text x="794" y="228" class="s">promotion, policy, failover</text>
+  <rect x="782" y="252" width="186" height="48" class="box"/>
+  <text x="794" y="272" class="h">Owner service + watchdog</text>
+  <text x="794" y="290" class="s">foreground service, WorkManager</text>
+  <path d="M728,206 L782,206" class="l"/>
+  <path d="M875,160 L875,176" class="l"/>
+  <path d="M875,236 L875,252" class="l"/>
+
+  <!-- Bottom row -->
+  <rect x="20" y="340" width="300" height="110" class="box"/>
+  <text x="32" y="362" class="h">Configuration  core/config/</text>
+  <text x="32" y="382" class="s">assets/config/app_config.json: every tunable</text>
+  <text x="32" y="398" class="s">defaults, then device overrides, then owner policy</text>
+  <text x="32" y="414" class="s">assets/config/machines.json: the machine catalogue</text>
+  <text x="32" y="430" class="s">no hard-coded thresholds in code</text>
+
+  <rect x="350" y="340" width="300" height="110" class="box"/>
+  <text x="362" y="362" class="h">Storage  data/  files/</text>
+  <text x="362" y="382" class="s">files/assets/&lt;id&gt;/: equipment, reference, calibration,</text>
+  <text x="362" y="398" class="s">diagnoses with spectrogram PNGs</text>
+  <text x="362" y="414" class="s">files/fl/: samples, weights per variant, node.json,</text>
+  <text x="362" y="430" class="s">network.json (repaired on start if corrupt)</text>
+
+  <rect x="680" y="340" width="300" height="110" class="acc"/>
+  <text x="692" y="362" class="h">Bench guard</text>
+  <text x="692" y="382" class="s">"Bench / test equipment" flag on any equipment</text>
+  <text x="692" y="398" class="s">stops its readings from becoming training, sharing</text>
+  <text x="692" y="414" class="s">or calibration data. tools/reset-phones.sh wipes</text>
+  <text x="692" y="430" class="s">learning data before a demo.</text>
+
+  <rect x="20" y="480" width="960" height="120" class="box"/>
+  <text x="32" y="502" class="h">UI  ui/  (Jetpack Compose, Humane Minimalist Dark: #07080A canvas, one crimson accent, Work Sans)</text>
+  <text x="32" y="524" class="s">Equipment flow: list, create (machine-type search, bench flag), detail (mini stats, calibration, drift), pre-check (sensor rates), reference, reading, result</text>
+  <text x="32" y="540" class="s">(status, score, spectrogram heatmap, likely issues, label chips, notification proposal, share), history (thumbnails).</text>
+  <text x="32" y="562" class="s">Federated shell: Network (status, latest-reading heatmap, nodes by name), Devices (auto-join state, Nearby on this WiFi, WiFi Direct peers, dataset matrices),</text>
+  <text x="32" y="578" class="s">Sync (rounds, held-out accuracy, activity), Performance (standings, architectures, confusion heatmap, importance, device budget), Group settings (name, mode, policy).</text>
+</svg>

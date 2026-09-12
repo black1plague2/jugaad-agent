@@ -1,7 +1,7 @@
 # Jugaad Agent — End-to-End Architecture
 
 ## Project Overview
-Offline, on-device condition monitoring for rotating machines. Three (or more) phones train and merge fault models over **WiFi Direct** with **zero cloud dependency**. Hardware: iQOO 15 (Snapdragon 8 Elite Gen 5, Android 16). Built with Kotlin + Jetpack Compose + TensorFlow Lite 2.16.1 on device.
+Offline, on-device condition monitoring for rotating machines. Three (or more) phones train and merge fault models over **WiFi Direct or the local WiFi network** (owner found by node name over mDNS, clients join automatically) with **zero cloud dependency**. Diagrams: `docs/architecture.svg`, `docs/network-flow.svg`. Hardware: iQOO 15 (Snapdragon 8 Elite Gen 5, Android 16). Built with Kotlin + Jetpack Compose + TensorFlow Lite 2.16.1 on device.
 
 ---
 
@@ -158,19 +158,26 @@ Wire format: `"JGFL"` (4 ASCII bytes) + `u8 version=2` + `u8 type` + `u32 jsonLe
 
 ### 4.5 FlSyncService (`p2p/FlSyncService.kt:37-178`)
 Foreground service:
-- Binds server socket on port after WiFi Direct group forms
+- Binds server socket on port after WiFi Direct group forms (or after the create-group retries, so a phone on plain WiFi still serves)
+- Advertises `_jugaad-fl._tcp.` under the node name through the shared `LanDiscovery` while serving (4.8)
 - Loop: `coordinator.serveOnce(socket)` → `SyncBus.last` update
 - If role changes CLIENT→OWNER → update `lastRole`
 - Creates notification: "Syncing federated model over WiFi Direct. Keeps the radio awake so peers can reach this phone."
 
 ### 4.6 Failover (`p2p/Failover.kt`)
-Criteria for declaring owner dead + promotion. After failover, other clients must **manually** Discover→Connect to new owner (WiFi Direct requires tap for new pairing).
+Criteria for declaring owner dead + promotion (`sync.failoverAfterFailures`, default 3, counted by every client sync including auto-join). On plain WiFi the new owner advertises itself and the other clients join it by themselves (4.9); on WiFi Direct they must Discover and Connect (a new pairing needs a tap).
 
 ### 4.7 End-to-End Sync Round
 ```text
 OWNER: accept → read HELLO+WEIGHTS → merge → promote → reply MERGED+NETWORK+SAMPLES/DONE
 CLIENT: connect → send HELLO+WEIGHTS → receive MERGED → apply if guard passes → send SAMPLES → receive NETWORK+DONE
 ```
+
+### 4.8 LAN discovery (`p2p/LanDiscovery.kt`)
+One process-wide `NsdManager` browser/advertiser (`ServiceLocator.lanDiscovery`). The owner registers DNS-SD service type `_jugaad-fl._tcp.` with service name = node name and TXT `id=<deviceId>` on the sync port while `FlSyncService` serves. Every phone browses continuously; services are resolved one at a time (NsdManager rejects overlapping resolves), IPv4 only, and a router address is kept over a 192.168.49.x WiFi Direct group address for the same name. The phone's own advertisement is filtered out by device id. `LanDiscovery.pickOwner(peers, lastOwnerAddress)`: last owner if still visible, else the only one, else null (the user chooses under Devices > Nearby).
+
+### 4.9 Auto-join (`p2p/AutoJoin.kt`)
+Started next to `AutoTrainer` with the FL runtime. Each loop turn calls the pure `AutoJoin.plan(...)`: off (`sync.autoJoin=false`), serving, no owner, ambiguous owners, sync now (new or changed owner, or `sync.autoJoinIntervalMs` elapsed, default 60 s), or wait with a countdown. A sync goes through `SyncNow.asClient(context, host)`, which holds one `Mutex` so auto-join, manual taps, `AutoTrainer` and `SyncWorker` never run two client sessions at once. `SyncNow` resolves the owner as: explicit host, formed WiFi Direct group owner (unless this phone owns the group but is not serving), else the advertised owner picked as above. Status text is published on `SyncBus.autoJoin` and shown under the Devices status chip.
 
 ---
 
@@ -192,7 +199,7 @@ CLIENT: connect → send HELLO+WEIGHTS → receive MERGED → apply if guard pas
 | `ui/result` | Diagnosis result with spectrogram + issues | `ResultViewModel` |
 | `ui/history` | Historical diagnosis records | — |
 | `ui/network/Network` | Federated network overview | `NetworkViewModel` |
-| `ui/network/Devices` | Connected peer list | — |
+| `ui/network/Devices` | Auto-join state, Nearby on this WiFi (owners by node name), WiFi Direct peers, Serve as owner / Sync now / Create group, dataset matrices | `NetworkViewModel` |
 | `ui/network/Sync` | Sync control + status | `SyncTab` |
 | `ui/network/Performance` | Model importance/performance | — |
 | `ui/network/GroupSettings` | Group/policy configuration | — |
