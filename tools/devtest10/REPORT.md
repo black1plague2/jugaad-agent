@@ -154,3 +154,40 @@ export JAVA_OPTS="-javaagent:C:/tools/noafunix-agent.jar"
 `JAVA_OPTS` covers the launcher, `-Dorg.gradle.jvmargs` the daemon, and the init script
 (`allprojects { tasks.withType(Test).configureEach { jvmArgs "-javaagent:..." } }`) the forked
 test JVM, which otherwise fails `:app:testDebugUnitTest` on its own socket to the daemon.
+
+## Stability check before the push (23:1x phone clock)
+
+With all three screens awake and the app foregrounded, the loop runs: B logged
+`auto-join: syncing with 'I2501-acba' at 192.168.66.134` then
+`fl sync: client variants=[base, small], rounds {base=52, small=37} -> {base=53, small=38}`, and A
+logged `fl sync: client variants=[base, noise], rounds {base=51, noise=24} -> {base=53, noise=25}`,
+both within seconds. Final state on all three: same build `25182085859111ae`, zero
+`FATAL EXCEPTION`, C `"lastRole": "OWNER"`, A and B `"lastRole": "CLIENT"` with
+`consecutiveSyncFailures 0` pointing at 192.168.66.134.
+
+Risk found while checking this, not caused by the fixes in this pass: with every screen asleep the
+loop stalls. A kept trying on schedule and kept failing,
+`fl sync: client failed: SocketTimeoutException: failed to connect to /192.168.66.134 (port 8988)
+... after 5000ms` (23:14:01 to 23:14:12), while C was still listening on 8988 and
+`FlSyncService` was still `isForeground=true`. The reason is visible in `dumpsys power` on C: its
+wake lock read
+
+```
+PARTIAL_WAKE_LOCK 'jugaad:fl-sync' DISABLED (uid=10346 pid=511) mIsFrozen
+```
+
+The owner's process was frozen by the OS cached-app freezer despite the foreground service, so the
+wake lock was disabled and the server socket went unserviced. `am get-standby-bucket` returned 10
+and `dumpsys deviceidle whitelist` lists no `com.jugaad.agent.debug`, so the app is not exempt from
+battery optimisation. Once the screens were woken the same lock read
+`ACQ=-3m26s955ms LONG` and syncing resumed immediately.
+
+This is the same failure family as the v4 note "the owner's sleeping screen stalled its server".
+It does not affect a demo where someone is holding a phone, and every verified pass in this
+repository ran with screens on. If unattended syncing is wanted, the owner at least needs a doze
+exemption, which is a device setting rather than a code change and was deliberately not applied
+here:
+
+```bash
+adb -s <device> shell dumpsys deviceidle whitelist +com.jugaad.agent.debug
+```

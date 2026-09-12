@@ -109,6 +109,16 @@ Python (`ml/.venv`, TF 2.16.1): `ml/fl/export_fl_head.py` (bake heads), `pretrai
 (MAFAULDA leave-one-bin-out; `--include-field` for real field data only), `network_sim.py`,
 `field_ingest.py` (`--for-training` excludes bench equipment; other pulls are `.DO-NOT-TRAIN`).
 
+- Stability check (E12, 23:1x): with screens awake the loop runs, A and B both advanced rounds
+  against owner C within seconds and all three sit at `consecutiveSyncFailures 0` with no
+  `FATAL EXCEPTION`. With all screens asleep it stalls: C stayed `isForeground=true` and listening
+  on 8988, but `dumpsys power` showed its wake lock as
+  `PARTIAL_WAKE_LOCK 'jugaad:fl-sync' DISABLED ... mIsFrozen`, so clients timed out connecting.
+  The app is in standby bucket 10 and is not on `dumpsys deviceidle whitelist`. Same family as the
+  earlier "owner's sleeping screen stalled its server" note. Unattended syncing needs a doze
+  exemption on the owner (`dumpsys deviceidle whitelist +com.jugaad.agent.debug`); it was not
+  applied, since it is a device setting and every verified pass here ran with screens on.
+
 ## Rules that must hold
 
 - Never train, share or calibrate on readings taken with the phones on a table or on synthetic
