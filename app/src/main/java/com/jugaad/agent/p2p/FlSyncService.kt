@@ -40,6 +40,7 @@ class FlSyncService : Service() {
     private var server: ServerSocket? = null
     private var loopJob: Job? = null
     private var wifiManager: WifiDirectManager? = null
+    private var lan: LanDiscovery? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var wifiLock: WifiManager.WifiLock? = null
 
@@ -77,6 +78,12 @@ class FlSyncService : Service() {
             val socket = bindServerSocket(manager) ?: return@launch
             server = socket
             SyncBus.serving.value = true
+            // Advertise on the local WiFi network too, so phones on the same router find this
+            // owner by node name without the WiFi Direct pairing dialog (v6 plan).
+            lan = LanDiscovery(applicationContext).also { l ->
+                val c = flRuntime.config.value
+                l.advertise(c.name, c.deviceId, socket.localPort)
+            }
 
             val coordinator = FedAvgCoordinator(RuntimePeer(flRuntime))
 
@@ -130,6 +137,8 @@ class FlSyncService : Service() {
         server = null
         wifiManager?.stop()
         wifiManager = null
+        lan?.stopAdvertising()
+        lan = null
         wakeLock?.let { if (it.isHeld) it.release() }
         wakeLock = null
         wifiLock?.let { if (it.isHeld) it.release() }

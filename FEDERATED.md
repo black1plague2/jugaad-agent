@@ -288,3 +288,18 @@ adb logcat -s JUGAAD:*
 - The owner must keep the app installed and the sync service running; if it leaves, another node
   creates a group and continues from its replicated state.
 - The heads are too small to benefit from the NPU; the QNN path remains an inference-only option.
+
+## v6: peer discovery by node name on the same WiFi (2026-09-12)
+
+When the phones share a router, WiFi Direct pairing is no longer required. While
+`FlSyncService` serves, the owner advertises the DNS-SD service `_jugaad-fl._tcp.` under its node
+name (TXT `id=<deviceId>`) on the sync port; every phone with the federated shell open runs
+discovery and lists the advertised owners under Devices > "Nearby on this WiFi" by node name with
+a Sync button (`p2p/LanDiscovery.kt`). "Sync now" and the background scheduler go through
+`SyncNow.asClient`, which picks, in order: an explicit host, the owner of a formed WiFi Direct
+group, or after a 3 s scan the advertised owner that matches the last owner address or the only
+one visible (two unknown owners: the user taps a name). A phone with no group can tap "Serve as
+owner"; the service still forms a WiFi Direct group for phones without a router. The owner's own
+advertisement is filtered out by device id; a name that resolves on both interfaces keeps the
+router address over the 192.168.49.x group address. The status chip reads "Owner visible on WiFi"
+before the first sync and "Synchronized" after it. Evidence: `tools/devtest9/REPORT.md`.

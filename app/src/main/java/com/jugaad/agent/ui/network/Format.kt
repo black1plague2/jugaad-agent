@@ -51,10 +51,11 @@ internal fun syncStatus(ui: NetworkUiState): Pair<String, Semantic> {
     val failed = ui.lastSync?.message?.contains("failed", ignoreCase = true) == true
     return when {
         failed -> "Sync failed" to Semantic.CRITICAL
-        ui.group.isGroupOwner && ui.serving -> "Serving" to Semantic.POSITIVE
+        ui.serving -> "Serving" to Semantic.POSITIVE
         ui.group.isGroupOwner -> "Group formed, not serving" to Semantic.CRITICAL
-        ui.group.formed && ui.lastSync != null -> "Synchronized" to Semantic.POSITIVE
+        ui.lastSync != null -> "Synchronized" to Semantic.POSITIVE
         ui.group.formed -> "Connected" to Semantic.INFORMATIVE
+        ui.lanPeers.isNotEmpty() -> "Owner visible on WiFi" to Semantic.INFORMATIVE
         else -> "Not connected" to Semantic.NEUTRAL
     }
 }

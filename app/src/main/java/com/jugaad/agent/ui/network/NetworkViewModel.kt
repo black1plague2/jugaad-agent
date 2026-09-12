@@ -23,6 +23,7 @@ import com.jugaad.agent.fl.TrainBudget
 import com.jugaad.agent.fl.VariantMetrics
 import com.jugaad.agent.p2p.Failover
 import com.jugaad.agent.p2p.FlSyncService
+import com.jugaad.agent.p2p.LanDiscovery
 import com.jugaad.agent.p2p.SyncBus
 import com.jugaad.agent.p2p.SyncNow
 import com.jugaad.agent.p2p.SyncResult
@@ -59,6 +60,8 @@ data class NetworkUiState(
     val confusion: Array<IntArray>? = null,
     val displayNodes: List<NodeCard> = emptyList(),
     val peers: List<WifiDirectManager.Peer> = emptyList(),
+    /** Owners advertising on the local WiFi network, by node name (this device filtered out). */
+    val lanPeers: List<LanDiscovery.LanPeer> = emptyList(),
     val group: WifiDirectManager.GroupInfo = WifiDirectManager.GroupInfo(false, false, null),
     val serving: Boolean = false,
     val lastSync: SyncResult? = null,
@@ -87,6 +90,7 @@ class NetworkViewModel(
 ) : ViewModel() {
 
     private val manager = WifiDirectManager(appContext)
+    private val lan = LanDiscovery(appContext)
 
     private val _ui = MutableStateFlow(NetworkUiState(schedulerEnabled = SyncScheduler.isEnabled(appContext)))
     val ui: StateFlow<NetworkUiState> = _ui
@@ -98,10 +102,16 @@ class NetworkViewModel(
 
     init {
         manager.start()
+        lan.startDiscovery()
         refreshLatestReading()
 
         viewModelScope.launch {
             manager.peers.collect { list -> _ui.value = _ui.value.copy(peers = list) }
+        }
+        viewModelScope.launch {
+            combine(lan.peers, services.flRuntime.flatMapLatest { it?.config ?: flowOf(null) }) { list, cfg ->
+                list.filterNot { it.deviceId == cfg?.deviceId }
+            }.collect { list -> _ui.value = _ui.value.copy(lanPeers = list) }
         }
         viewModelScope.launch {
             manager.group.collect { g ->
@@ -326,7 +336,11 @@ class NetworkViewModel(
 
     // --- Peers / group ---------------------------------------------------------
 
-    fun discover() = manager.discover()
+    fun discover() {
+        manager.discover()
+        lan.stopDiscovery()
+        lan.startDiscovery()
+    }
     fun connect(address: String) = manager.connect(address)
     fun createGroup() = manager.createGroup()
     fun removeGroup() = manager.removeGroup()
@@ -338,22 +352,28 @@ class NetworkViewModel(
 
     /** Routed through [SyncNow.asClient] (not a direct [com.jugaad.agent.p2p.FedAvgCoordinator]
      * call) so a manual tap counts failures/triggers failover exactly like the scheduler does. */
-    fun syncNow() {
+    fun syncNow() = launchSync(null)
+
+    /** Sync with one owner picked by node name from the Nearby list (its LAN address). */
+    fun syncWith(host: String) = launchSync(host)
+
+    private fun launchSync(host: String?) {
         if (_ui.value.busy) return
         if (services.flRuntime.value == null) return
-        val group = _ui.value.group
-        if (!group.formed || group.isGroupOwner || group.ownerAddress == null) {
-            _ui.value = _ui.value.copy(message = "Connect to a group owner first")
+        if (_ui.value.serving || (_ui.value.group.isGroupOwner && host == null)) {
+            _ui.value = _ui.value.copy(message = "This device is the owner; other phones sync to it")
             return
         }
         _ui.value = _ui.value.copy(busy = true)
         viewModelScope.launch {
             runCatching {
-                withContext(Dispatchers.IO) { SyncNow.asClient(appContext) }
+                withContext(Dispatchers.IO) { SyncNow.asClient(appContext, host) }
             }.onSuccess { result ->
                 // SyncNow.asClient already publishes to SyncBus.last, which this ViewModel
                 // observes (see init), so lastSync updates on its own.
-                _ui.value = _ui.value.copy(busy = false, message = result?.message)
+                val message = result?.message
+                    ?: "No owner found: no WiFi Direct group and nobody is serving on this WiFi"
+                _ui.value = _ui.value.copy(busy = false, message = message)
                 refreshDataset()
             }.onFailure { e ->
                 _ui.value = _ui.value.copy(busy = false, message = "Sync failed: ${e.message}")
@@ -381,6 +401,7 @@ class NetworkViewModel(
     }
 
     override fun onCleared() {
+        lan.stopDiscovery()
         manager.stop()
         super.onCleared()
     }
