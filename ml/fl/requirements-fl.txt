@@ -1,0 +1,11 @@
+# Verified working combination: Python 3.12.8 + tensorflow==2.16.1 (Windows wheel).
+tensorflow==2.16.1
+numpy>=1.26,<2.0
+pytest>=8.0
+# v3 public-dataset pretraining (mafaulda_ingest.py / dataset.py / pretrain.py):
+scipy==1.13.1        # resample_poly, detrend -- pinned for numpy<2.0 compatibility
+pandas<2.3           # fast CSV parsing of MAFAULDA members straight from the zip stream
+pytz
+python-dateutil       # pandas runtime deps (pandas itself installed --no-deps to protect numpy pin)
+# deliberately NOT installed: librosa (see logmel_np.py -- pure numpy/scipy
+# reimplementation of logmel_reference.py's STFT + mel-filterbank math)

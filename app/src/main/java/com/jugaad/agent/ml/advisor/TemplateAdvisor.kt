@@ -15,6 +15,12 @@ class TemplateAdvisor : MaintenanceAdvisor {
     override val isReady = true
 
     override suspend fun advise(ctx: AdviceContext): String {
+        val topIssue = ctx.topIssue
+        if (topIssue != null) {
+            val label = topIssue.label.replaceFirstChar { it.lowercaseChar() }
+            val pct = (topIssue.confidence * 100).toInt()
+            return "Likely $label ($pct%). ${topIssue.action}"
+        }
         val freq = if (ctx.dominantHz > 0) "around ${ctx.dominantHz.toInt()} Hz" else "across the spectrum"
         return when (ctx.status) {
             MachineStatus.HEALTHY ->

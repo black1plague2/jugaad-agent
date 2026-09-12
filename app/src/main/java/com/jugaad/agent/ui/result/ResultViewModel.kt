@@ -10,6 +10,7 @@ import androidx.lifecycle.viewModelScope
 import com.jugaad.agent.core.Logx
 import com.jugaad.agent.di.ServiceLocator
 import com.jugaad.agent.domain.model.Diagnosis
+import com.jugaad.agent.domain.model.FaultClass
 import com.jugaad.agent.viz.ReportRenderer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,6 +31,8 @@ class ResultViewModel(
         val assetName: String = "",
         val spectrogram: Bitmap? = null,
         val heuristicClassifier: Boolean = true,
+        val flRuntimeReady: Boolean = false,
+        val labelSaved: Boolean = false,
     )
 
     private val _state = MutableStateFlow(State())
@@ -45,13 +48,30 @@ class ResultViewModel(
                     if (f.exists()) BitmapFactory.decodeFile(f.path) else null
                 }
             }
-            _state.value = State(
+            _state.value = _state.value.copy(
                 loading = false,
                 diagnosis = d,
                 assetName = asset?.name ?: "Asset",
                 spectrogram = bmp,
                 heuristicClassifier = !services.engineStatus.value.cnnReady,
             )
+        }
+        viewModelScope.launch {
+            services.flRuntime.collect { runtime ->
+                _state.value = _state.value.copy(flRuntimeReady = runtime != null)
+            }
+        }
+    }
+
+    fun confirmLabel(faultClass: FaultClass) {
+        val store = services.flRuntime.value?.store ?: return
+        viewModelScope.launch {
+            val ok = withContext(Dispatchers.IO) {
+                store.label(diagnosisId, faultClass.index)
+            }
+            if (ok) {
+                _state.value = _state.value.copy(labelSaved = true)
+            }
         }
     }
 
@@ -68,7 +88,7 @@ class ResultViewModel(
                 val send = Intent(Intent.ACTION_SEND).apply {
                     type = "image/png"
                     putExtra(Intent.EXTRA_STREAM, uri)
-                    putExtra(Intent.EXTRA_SUBJECT, "Jugaad Agent report — ${s.assetName}")
+                    putExtra(Intent.EXTRA_SUBJECT, "Jugaad Agent report, ${s.assetName}")
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 }
                 context.startActivity(

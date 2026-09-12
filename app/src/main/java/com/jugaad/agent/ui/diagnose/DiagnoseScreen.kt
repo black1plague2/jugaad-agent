@@ -7,34 +7,28 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.jugaad.agent.ui.common.CaptureOverlay
 import com.jugaad.agent.ui.common.SectionCard
+import com.jugaad.agent.ui.common.WaveformView
+import com.jugaad.agent.ui.common.fiori.FioriColors
+import com.jugaad.agent.ui.common.fiori.PrimaryButton
 import com.jugaad.agent.ui.services
-import com.jugaad.agent.ui.theme.Accent
-import com.jugaad.agent.ui.theme.Ink
-import com.jugaad.agent.ui.theme.StatusCritical
-import com.jugaad.agent.ui.theme.TextHi
-import com.jugaad.agent.ui.theme.TextMid
 import com.jugaad.agent.ui.vmFactory
 
 @RequiresPermission(Manifest.permission.RECORD_AUDIO)
@@ -62,59 +56,62 @@ fun DiagnoseScreen(
                 Modifier.fillMaxSize().padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                Text("Diagnose", style = MaterialTheme.typography.displayLarge, color = TextHi)
+                Text("Take reading", style = MaterialTheme.typography.headlineMedium, color = FioriColors.TextPrimary)
                 Text(
                     "One 3-second reading. Rest the phone flat on the machine housing and keep still.",
-                    color = TextMid,
+                    color = FioriColors.TextSecondary,
                 )
 
                 SectionCard {
+                    WaveformView(peaks = progress.waveform, modifier = Modifier.fillMaxWidth())
                     when (val p = phase) {
                         DiagnoseViewModel.Phase.Idle ->
-                            Text("Ready.", color = TextMid)
+                            Text("Ready.", color = FioriColors.TextSecondary)
                         DiagnoseViewModel.Phase.Capturing ->
-                            Text("Listening…", color = TextHi)
+                            Text("Listening", color = FioriColors.TextPrimary)
                         DiagnoseViewModel.Phase.Analyzing ->
-                            Row2("Analysing (log-mel → anomaly score → CNN → advice)…")
+                            Text("Analysing: log-mel, anomaly score, CNN, notification proposal", color = FioriColors.TextPrimary)
                         is DiagnoseViewModel.Phase.Done ->
-                            Text("Done.", color = TextHi)
+                            Text("Done.", color = FioriColors.TextPrimary)
                         is DiagnoseViewModel.Phase.Error ->
-                            Text(p.message, color = StatusCritical)
+                            Text(p.message, color = FioriColors.Negative)
                     }
                 }
 
                 Box(Modifier.weight(1f))
 
                 when (phase) {
-                    DiagnoseViewModel.Phase.Idle -> Button(
+                    DiagnoseViewModel.Phase.Idle -> PrimaryButton(
+                        text = "Start reading",
                         onClick = vm::start,
-                        modifier = Modifier.fillMaxWidth().height(56.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Ink),
-                    ) { Text("Start reading", fontWeight = FontWeight.Bold) }
+                        modifier = Modifier.fillMaxWidth(),
+                    )
 
-                    is DiagnoseViewModel.Phase.Error -> Button(
+                    is DiagnoseViewModel.Phase.Error -> PrimaryButton(
+                        text = "Retry",
                         onClick = { vm.reset(); vm.start() },
-                        modifier = Modifier.fillMaxWidth().height(56.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Ink),
-                    ) { Text("Retry", fontWeight = FontWeight.Bold) }
+                        modifier = Modifier.fillMaxWidth(),
+                    )
 
                     else -> Unit
                 }
-                OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Back") }
+                TextButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
+                    Text("Back", color = FioriColors.TextSecondary)
+                }
             }
 
             if (progress.running) {
-                CaptureOverlay(progress = progress, label = "Diagnostic reading")
+                CaptureOverlay(progress = progress, label = "Reading")
             } else if (phase == DiagnoseViewModel.Phase.Analyzing) {
                 Box(
                     Modifier.fillMaxSize().padding(pad),
                     contentAlignment = Alignment.Center,
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator(color = Accent)
+                        CircularProgressIndicator(color = FioriColors.Brand)
                         Text(
-                            "  Computing…",
-                            color = TextMid,
+                            "Computing",
+                            color = FioriColors.TextSecondary,
                             textAlign = TextAlign.Center,
                             modifier = Modifier.padding(top = 12.dp),
                         )
@@ -124,6 +121,3 @@ fun DiagnoseScreen(
         }
     }
 }
-
-@Composable
-private fun Row2(text: String) = Text(text, color = TextHi)

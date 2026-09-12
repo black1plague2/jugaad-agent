@@ -15,6 +15,8 @@ import com.jugaad.agent.ui.checklist.ChecklistScreen
 import com.jugaad.agent.ui.createasset.CreateAssetScreen
 import com.jugaad.agent.ui.diagnose.DiagnoseScreen
 import com.jugaad.agent.ui.history.HistoryScreen
+import com.jugaad.agent.ui.network.FederatedShell
+import com.jugaad.agent.ui.network.GroupSettingsScreen
 import com.jugaad.agent.ui.result.ResultScreen
 
 @RequiresPermission(Manifest.permission.RECORD_AUDIO)
@@ -27,7 +29,19 @@ fun JugaadNavGraph(nav: NavHostController) {
             AssetListScreen(
                 onOpenAsset = { id -> nav.navigate(Routes.assetDetail(id)) },
                 onCreate = { nav.navigate(Routes.CREATE_ASSET) },
+                onLearn = { nav.navigate(Routes.NETWORK) },
             )
+        }
+
+        composable(Routes.NETWORK) {
+            FederatedShell(
+                onBack = { nav.popBackStack() },
+                onOpenGroupSettings = { nav.navigate(Routes.GROUP_SETTINGS) },
+            )
+        }
+
+        composable(Routes.GROUP_SETTINGS) {
+            GroupSettingsScreen(onBack = { nav.popBackStack() })
         }
 
         composable(Routes.CREATE_ASSET) {

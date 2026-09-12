@@ -3,11 +3,32 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!-- ============================================================
-         Jugaad Agent is a FULLY OFFLINE app.
-         There is deliberately NO <uses-permission INTERNET /> line.
-         Do not add one — the diagnosis, LLM advice and storage are
-         all on-device. A missing INTERNET permission is a feature.
+         Jugaad Agent has no cloud or server dependency: diagnosis, LLM
+         advice and storage are all on-device. INTERNET is requested only
+         because Android gates every socket — even a purely local one — on
+         that permission; it is used exclusively for WiFi Direct
+         peer-to-peer model sync between phones running this app, and
+         keeps working in airplane mode as long as WiFi is on.
          ============================================================ -->
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <!-- WiFi Direct peer discovery requires location below API 33, and
+         NEARBY_WIFI_DEVICES (which needs no location access) from API 33 on. -->
+    <uses-permission
+        android:name="android.permission.ACCESS_FINE_LOCATION"
+        android:maxSdkVersion="32" />
+    <uses-permission
+        android:name="android.permission.NEARBY_WIFI_DEVICES"
+        android:usesPermissionFlags="neverForLocation"
+        tools:targetApi="tiramisu" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Keeps the CPU (and, via WifiManager.WifiLock, the WiFi radio) awake while
+         FlSyncService is serving, so a sleeping screen doesn't stall client syncs. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.CAMERA" />
@@ -20,6 +41,7 @@
     <uses-feature android:name="android.hardware.microphone" android:required="true" />
     <uses-feature android:name="android.hardware.sensor.accelerometer" android:required="true" />
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
+    <uses-feature android:name="android.hardware.wifi.direct" android:required="false" />
 
     <application
         android:name=".JugaadApp"
@@ -36,7 +58,6 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:screenOrientation="portrait"
             android:theme="@style/Theme.JugaadAgent">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -54,6 +75,12 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <!-- WiFi Direct group-owner listener; runs only while this phone is the GO. -->
+        <service
+            android:name=".p2p.FlSyncService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
     </application>
 
 </manifest>

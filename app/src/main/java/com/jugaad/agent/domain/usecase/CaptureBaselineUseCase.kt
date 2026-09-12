@@ -36,6 +36,9 @@ class CaptureBaselineUseCase(
     ): Outcome<Baseline> {
         val featureVectors = ArrayList<FloatArray>(clips)
         val imuIndices = ArrayList<Double>(clips)
+        val gyroIndices = ArrayList<Double>(clips)
+        val magIndices = ArrayList<Double>(clips)
+        val magRmsValues = ArrayList<Double>(clips)
 
         for (i in 1..clips) {
             onEvent(Event.ClipStarted(i, clips))
@@ -45,9 +48,12 @@ class CaptureBaselineUseCase(
                     return cap
                 }
                 is Outcome.Ok -> {
-                    val a = features.analyze(cap.value.audio, cap.value.imu)
+                    val a = features.analyze(cap.value.audio, cap.value.motion)
                     featureVectors.add(a.feature)
                     imuIndices.add(a.imuIndex)
+                    gyroIndices.add(a.gyroIndex)
+                    magIndices.add(a.magIndex)
+                    magRmsValues.add(a.magRms)
                     onEvent(Event.ClipDone(i, clips))
                 }
             }
@@ -62,10 +68,28 @@ class CaptureBaselineUseCase(
             rawStd = stats.rawStd,
             imuIndexMean = if (imuIndices.isEmpty()) 0.0 else imuIndices.average(),
             clipCount = featureVectors.size,
+            gyroIndexMean = if (gyroIndices.isEmpty()) 0.0 else gyroIndices.average(),
+            magIndexMean = if (magIndices.isEmpty()) 0.0 else magIndices.average(),
+            magRmsMean = if (magRmsValues.isEmpty()) 0.0 else magRmsValues.average(),
+            imuIndexStd = populationStd(imuIndices),
+            gyroIndexStd = populationStd(gyroIndices),
+            magIndexStd = populationStd(magIndices),
+            magRmsStd = populationStd(magRmsValues),
         )
         assets.saveBaseline(baseline)
-        Logx.i("baseline saved asset=$assetId spread=${"%.4f".format(baseline.spread)} imu=${"%.3f".format(baseline.imuIndexMean)}")
+        Logx.i(
+            "baseline saved asset=$assetId spread=${"%.4f".format(baseline.spread)} " +
+                "imu=${"%.3f".format(baseline.imuIndexMean)} gyro=${"%.3f".format(baseline.gyroIndexMean)} " +
+                "mag=${"%.3f".format(baseline.magIndexMean)}"
+        )
         onEvent(Event.Finished(baseline))
         return Outcome.Ok(baseline)
     }
+}
+
+/** Population std (divide by N, not N-1) over a small clip count — matches [AnomalyScorer.buildBaseline]'s rawStd. */
+private fun populationStd(values: List<Double>): Double {
+    if (values.isEmpty()) return 0.0
+    val mean = values.average()
+    return kotlin.math.sqrt(values.sumOf { (it - mean) * (it - mean) } / values.size)
 }

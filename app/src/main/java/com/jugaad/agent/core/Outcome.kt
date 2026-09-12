@@ -10,12 +10,12 @@ sealed interface Outcome<out T> {
 
     fun getOrNull(): T? = (this as? Ok)?.value
 
-    inline fun <R> map(f: (T) -> R): Outcome<R> = when (this) {
+    fun <R> map(f: (T) -> R): Outcome<R> = when (this) {
         is Ok -> Ok(f(value))
         is Err -> this
     }
 
-    inline fun onErr(f: (Err) -> Unit): Outcome<T> {
+    fun onErr(f: (Err) -> Unit): Outcome<T> {
         if (this is Err) f(this)
         return this
     }

@@ -1,5 +1,6 @@
 package com.jugaad.agent.ml.classifier
 
+import com.jugaad.agent.domain.model.Baseline
 import com.jugaad.agent.domain.model.FaultClass
 import com.jugaad.agent.domain.model.InferenceBackend
 
@@ -21,11 +22,25 @@ interface FaultClassifier {
         val inferenceMs: Long,
     )
 
+    /** Baseline-relative input for the federated head (see com.jugaad.agent.fl.FeatureDelta). */
+    data class Input(
+        val logMel: FloatArray,
+        val feature: FloatArray,
+        val imuIndex: Double,
+        val baseline: Baseline,
+        val gyroIndex: Double = 0.0,
+        val magIndex: Double = 0.0,
+        val magRms: Double = 0.0,
+    )
+
     val isReady: Boolean
     val backend: InferenceBackend
 
     /** @param logMel row-major, mel-major, length 128*128. */
     fun classify(logMel: FloatArray): Prediction?
+
+    /** Default keeps old implementations working; the federated head overrides this. */
+    fun classify(input: Input): Prediction? = classify(input.logMel)
 
     fun close() {}
 }

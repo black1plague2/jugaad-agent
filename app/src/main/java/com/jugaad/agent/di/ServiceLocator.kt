@@ -4,13 +4,30 @@ import android.content.Context
 import com.jugaad.agent.BuildConfig
 import com.jugaad.agent.core.Constants
 import com.jugaad.agent.core.Logx
+import com.jugaad.agent.core.config.ConfigStore
+import com.jugaad.agent.core.config.MachineCatalog
 import com.jugaad.agent.data.repository.AssetRepositoryImpl
 import com.jugaad.agent.data.repository.DiagnosisRepositoryImpl
 import com.jugaad.agent.data.storage.JsonFileStore
+import com.jugaad.agent.domain.model.InferenceBackend
 import com.jugaad.agent.domain.repository.AssetRepository
 import com.jugaad.agent.domain.repository.DiagnosisRepository
+import com.jugaad.agent.domain.usecase.CalibrateUseCase
 import com.jugaad.agent.domain.usecase.CaptureBaselineUseCase
 import com.jugaad.agent.domain.usecase.DiagnoseUseCase
+import com.jugaad.agent.domain.usecase.RefreshBaselineUseCase
+import com.jugaad.agent.fl.AutoTrainer
+import com.jugaad.agent.fl.EventType
+import com.jugaad.agent.fl.FlRuntime
+import com.jugaad.agent.fl.FlVariants
+import com.jugaad.agent.fl.LiteRtFaultClassifier
+import com.jugaad.agent.fl.NetworkStateIO
+import com.jugaad.agent.fl.NodeConfigIO
+import com.jugaad.agent.fl.NodeRole
+import com.jugaad.agent.fl.Recovery
+import com.jugaad.agent.fl.SampleStore
+import com.jugaad.agent.fl.TrainBudget
+import com.jugaad.agent.fl.VariantKind
 import com.jugaad.agent.ml.FeatureExtractor
 import com.jugaad.agent.ml.ModelInstaller
 import com.jugaad.agent.ml.advisor.GemmaAdvisor
@@ -21,9 +38,11 @@ import com.jugaad.agent.ml.classifier.ExecuTorchFaultClassifier
 import com.jugaad.agent.ml.classifier.FaultClassifier
 import com.jugaad.agent.ml.classifier.HeuristicFaultClassifier
 import com.jugaad.agent.ml.executorch.SocDetector
+import com.jugaad.agent.p2p.FlSyncService
 import com.jugaad.agent.sensor.AudioCapture
 import com.jugaad.agent.sensor.CaptureCoordinator
 import com.jugaad.agent.sensor.ImuCapture
+import com.jugaad.agent.sensor.MotionCapture
 import com.jugaad.agent.viz.AndroidSpectrogramRenderer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -43,6 +62,11 @@ import java.io.File
  */
 class ServiceLocator private constructor(app: Context) {
 
+    init {
+        ConfigStore.load(app)
+        MachineCatalog.load(app)
+    }
+
     val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     private val store = JsonFileStore(app.filesDir)
@@ -53,8 +77,8 @@ class ServiceLocator private constructor(app: Context) {
     val diagnosisRepository: DiagnosisRepository = DiagnosisRepositoryImpl(store)
 
     private val audioCapture = AudioCapture()
-    val imuCapture = ImuCapture(app)
-    val captureCoordinator = CaptureCoordinator(audioCapture, imuCapture)
+    val imuCapture = ImuCapture(app) // still used directly by ChecklistScreen.isRestingStill()
+    val captureCoordinator = CaptureCoordinator(audioCapture, MotionCapture(app))
 
     private val featureExtractor = FeatureExtractor()
     private val anomalyScorer = AnomalyScorer()
@@ -69,6 +93,9 @@ class ServiceLocator private constructor(app: Context) {
 
     private val _advisor = MutableStateFlow<MaintenanceAdvisor>(TemplateAdvisor())
     val advisor: StateFlow<MaintenanceAdvisor> = _advisor
+
+    private val _flRuntime = MutableStateFlow<FlRuntime?>(null)
+    val flRuntime: StateFlow<FlRuntime?> = _flRuntime
 
     private val templateAdvisor = TemplateAdvisor()
 
@@ -85,9 +112,11 @@ class ServiceLocator private constructor(app: Context) {
         appScope.launch {
             val installed = modelInstaller.install()
 
+            var executorchLoaded = false
             if (BuildConfig.EXECUTORCH_ENABLED) {
                 val et = ExecuTorchFaultClassifier(installed.cnnXnnpack, installed.cnnQnn)
                 if (et.load()) {
+                    executorchLoaded = true
                     _classifier.value = et
                     engineStatus.value = engineStatus.value.copy(
                         cnnReady = true,
@@ -96,6 +125,46 @@ class ServiceLocator private constructor(app: Context) {
                 } else {
                     Logx.i("ExecuTorch not loaded — keeping HeuristicFaultClassifier")
                 }
+            }
+
+            if (installed.flHeads.isNotEmpty()) {
+                runCatching {
+                    // Self-healing (v4 §4): repair any corrupt fl/*.json or asset json, and
+                    // quarantine wrong-length weight files, before anything tries to load them.
+                    val recovery = Recovery.repair(appContext.filesDir)
+
+                    val flDir = File(appContext.filesDir, "fl")
+                    val nodeConfig = MutableStateFlow(NodeConfigIO.load(flDir))
+                    val networkState = MutableStateFlow(NetworkStateIO.load(flDir, FlVariants.CHAMPION_DEFAULT))
+                    val sampleStore = SampleStore(flDir)
+                    val threads = TrainBudget.snapshot(appContext).threads
+
+                    val runtime = FlRuntime.build(
+                        FlVariants.ALL, installed.flHeads, sampleStore, nodeConfig, networkState, flDir, threads, recovery,
+                    )
+                    AutoTrainer(runtime, appScope, appContext).start()
+                    _flRuntime.value = runtime
+
+                    for (name in recovery.repairedFiles) runtime.addEvent(EventType.RECOVER, "repaired corrupt file: $name")
+                    for (name in recovery.staleWeights) runtime.addEvent(EventType.RECOVER, "quarantined stale weights: $name")
+
+                    if (!executorchLoaded) {
+                        _classifier.value = LiteRtFaultClassifier(runtime)
+                        engineStatus.value = engineStatus.value.copy(
+                            cnnReady = true,
+                            cnnBackendLabel = InferenceBackend.LITERT.longLabel,
+                        )
+                    }
+                    val mlpIds = FlVariants.ALL.filter { it.kind == VariantKind.MLP }.map { it.id }
+                    Logx.i("LiteRT heads loaded: ${mlpIds.joinToString(", ")}; strategies: ${runtime.trainers.keys.joinToString(", ")}")
+
+                    // Self-healing role restore (v4 §4): resume serving if this node was the
+                    // group owner before it last stopped (crash/reboot); a CLIENT does nothing
+                    // until the scheduler or the user syncs.
+                    if (nodeConfig.value.lastRole == NodeRole.OWNER) {
+                        FlSyncService.start(appContext)
+                    }
+                }.onFailure { t -> Logx.w("LiteRT heads failed to load — FL disabled this session", t) }
             }
 
             if (BuildConfig.GEMMA_ENABLED) {
@@ -118,6 +187,18 @@ class ServiceLocator private constructor(app: Context) {
         assets = assetRepository,
     )
 
+    /** Null until the FL runtime (and thus a [SampleStore] to calibrate against) is warmed up. */
+    fun calibrateUseCase(): CalibrateUseCase? {
+        val sampleStore = _flRuntime.value?.store ?: return null
+        return CalibrateUseCase(assetRepository, sampleStore) { ConfigStore.effective.value }
+    }
+
+    /** Null until the FL runtime is warmed up — same precondition as [calibrateUseCase]. */
+    fun refreshBaselineUseCase(): RefreshBaselineUseCase? {
+        val sampleStore = _flRuntime.value?.store ?: return null
+        return RefreshBaselineUseCase(assetRepository, sampleStore) { ConfigStore.effective.value }
+    }
+
     fun diagnoseUseCase() = DiagnoseUseCase(
         coordinator = captureCoordinator,
         features = featureExtractor,
@@ -128,6 +209,10 @@ class ServiceLocator private constructor(app: Context) {
         assets = assetRepository,
         history = diagnosisRepository,
         pngRenderer = pngRenderer,
+        sampleStore = _flRuntime.value?.store,
+        cfg = { ConfigStore.effective.value },
+        catalog = { MachineCatalog.byId(it) },
+        calibrate = calibrateUseCase(),
     )
 
     val reportsDir: File by lazy { File(appContext.cacheDir, Constants.REPORTS_DIR).apply { mkdirs() } }

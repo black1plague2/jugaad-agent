@@ -5,6 +5,7 @@ import com.jugaad.agent.domain.model.Baseline
 import com.jugaad.agent.domain.model.Diagnosis
 import com.jugaad.agent.domain.model.FaultClass
 import com.jugaad.agent.domain.model.InferenceBackend
+import com.jugaad.agent.domain.model.IssueSuggestion
 import com.jugaad.agent.domain.model.MachineStatus
 import com.jugaad.agent.ml.anomaly.Thresholds
 import kotlinx.serialization.Serializable
@@ -24,6 +25,8 @@ data class AssetDto(
     val hasBaseline: Boolean = false,
     val t1: Double = Thresholds.DEFAULT.t1,
     val t2: Double = Thresholds.DEFAULT.t2,
+    val machineTypeId: String = "generic",
+    val benchTest: Boolean = false,
 ) {
     fun toDomain() = Asset(
         id = id,
@@ -32,6 +35,8 @@ data class AssetDto(
         nameplatePhoto = nameplatePhoto,
         hasBaseline = hasBaseline,
         thresholds = Thresholds.safe(t1, t2),
+        machineTypeId = machineTypeId,
+        benchTest = benchTest,
     )
 
     companion object {
@@ -43,6 +48,8 @@ data class AssetDto(
             hasBaseline = a.hasBaseline,
             t1 = a.thresholds.t1,
             t2 = a.thresholds.t2,
+            machineTypeId = a.machineTypeId,
+            benchTest = a.benchTest,
         )
     }
 }
@@ -57,8 +64,19 @@ data class BaselineDto(
     val rawStd: Double,
     val imuIndexMean: Double,
     val clipCount: Int,
+    val gyroIndexMean: Double = 0.0,
+    val magIndexMean: Double = 0.0,
+    val magRmsMean: Double = 0.0,
+    val imuIndexStd: Double = 0.0,
+    val gyroIndexStd: Double = 0.0,
+    val magIndexStd: Double = 0.0,
+    val magRmsStd: Double = 0.0,
 ) {
-    fun toDomain() = Baseline(assetId, capturedAtMs, meanFeature, spread, rawStd, imuIndexMean, clipCount)
+    fun toDomain() = Baseline(
+        assetId, capturedAtMs, meanFeature, spread, rawStd, imuIndexMean, clipCount,
+        gyroIndexMean, magIndexMean, magRmsMean,
+        imuIndexStd, gyroIndexStd, magIndexStd, magRmsStd,
+    )
 
     companion object {
         fun from(b: Baseline) = BaselineDto(
@@ -69,6 +87,13 @@ data class BaselineDto(
             rawStd = b.rawStd,
             imuIndexMean = b.imuIndexMean,
             clipCount = b.clipCount,
+            gyroIndexMean = b.gyroIndexMean,
+            magIndexMean = b.magIndexMean,
+            magRmsMean = b.magRmsMean,
+            imuIndexStd = b.imuIndexStd,
+            gyroIndexStd = b.gyroIndexStd,
+            magIndexStd = b.magIndexStd,
+            magRmsStd = b.magRmsStd,
         )
     }
 }
@@ -85,10 +110,13 @@ data class DiagnosisDto(
     val status: String,
     val imuIndex: Double,
     val dominantHz: Double,
+    val dominantSource: String = "acoustic",
+    val sensorScore: Double = 0.0,
     val faultClassIndex: Int? = null,
     val faultConfidence: Float = 0f,
     val backend: String = InferenceBackend.NONE.name,
     val inferenceMs: Long = 0L,
+    val issues: List<IssueSuggestion> = emptyList(),
     val advice: String = "",
     val adviceSource: String = Diagnosis.AdviceSource.NONE.name,
     val spectrogramPng: String? = null,
@@ -103,10 +131,13 @@ data class DiagnosisDto(
         status = runCatching { MachineStatus.valueOf(status) }.getOrDefault(MachineStatus.HEALTHY),
         imuIndex = imuIndex,
         dominantHz = dominantHz,
+        dominantSource = dominantSource,
+        sensorScore = sensorScore,
         faultClass = faultClassIndex?.let { FaultClass.fromIndex(it) },
         faultConfidence = faultConfidence,
         backend = runCatching { InferenceBackend.valueOf(backend) }.getOrDefault(InferenceBackend.NONE),
         inferenceMs = inferenceMs,
+        issues = issues,
         advice = advice,
         adviceSource = runCatching { Diagnosis.AdviceSource.valueOf(adviceSource) }
             .getOrDefault(Diagnosis.AdviceSource.NONE),
@@ -124,10 +155,13 @@ data class DiagnosisDto(
             status = d.status.name,
             imuIndex = d.imuIndex,
             dominantHz = d.dominantHz,
+            dominantSource = d.dominantSource,
+            sensorScore = d.sensorScore,
             faultClassIndex = d.faultClass?.index,
             faultConfidence = d.faultConfidence,
             backend = d.backend.name,
             inferenceMs = d.inferenceMs,
+            issues = d.issues,
             advice = d.advice,
             adviceSource = d.adviceSource.name,
             spectrogramPng = d.spectrogramPng,

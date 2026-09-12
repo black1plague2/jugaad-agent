@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -28,6 +27,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.navigation.compose.rememberNavController
+import com.jugaad.agent.ui.common.fiori.FioriColors
+import com.jugaad.agent.ui.common.fiori.PrimaryButton
 import com.jugaad.agent.ui.nav.JugaadNavGraph
 import com.jugaad.agent.ui.theme.JugaadTheme
 import com.jugaad.agent.ui.theme.TextHi
@@ -69,7 +70,7 @@ private fun RecordAudioGate(content: @Composable () -> Unit) {
     if (granted) {
         content()
     } else {
-        Scaffold(containerColor = MaterialTheme.colorScheme.background) { pad ->
+        Scaffold(containerColor = FioriColors.Background) { pad ->
             Column(
                 Modifier.fillMaxSize().padding(pad).padding(32.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
@@ -82,9 +83,10 @@ private fun RecordAudioGate(content: @Composable () -> Unit) {
                     color = TextMid,
                     textAlign = TextAlign.Center,
                 )
-                Button(onClick = { launcher.launch(Manifest.permission.RECORD_AUDIO) }) {
-                    Text("Grant microphone access")
-                }
+                PrimaryButton(
+                    text = "Allow microphone",
+                    onClick = { launcher.launch(Manifest.permission.RECORD_AUDIO) },
+                )
             }
         }
     }

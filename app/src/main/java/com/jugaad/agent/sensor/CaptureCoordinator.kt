@@ -3,7 +3,6 @@ package com.jugaad.agent.sensor
 import android.Manifest
 import androidx.annotation.RequiresPermission
 import com.jugaad.agent.core.Constants
-import com.jugaad.agent.core.Logx
 import com.jugaad.agent.core.Outcome
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -16,7 +15,7 @@ import kotlin.math.abs
 data class RawCapture(
     val audio: FloatArray,          // 132300 samples, [-1, 1]
     val audioSource: String,
-    val imu: ImuCapture.Reading?,   // null if the accelerometer was unavailable
+    val motion: MotionCapture.Reading,
 )
 
 /** Live state for the capture overlay (countdown ring + waveform). */
@@ -31,12 +30,12 @@ data class CaptureProgress(
 }
 
 /**
- * Runs [AudioCapture] and [ImuCapture] together so the acoustic and vibration
- * views describe the same 3 seconds of machine behaviour.
+ * Runs [AudioCapture] and [MotionCapture] together so the acoustic and
+ * vibration views describe the same 3 seconds of machine behaviour.
  */
 class CaptureCoordinator(
     private val audioCapture: AudioCapture,
-    private val imuCapture: ImuCapture,
+    private val motionCapture: MotionCapture,
 ) {
     private val _progress = MutableStateFlow(CaptureProgress())
     val progress: StateFlow<CaptureProgress> = _progress.asStateFlow()
@@ -49,7 +48,7 @@ class CaptureCoordinator(
         reset(seconds)
         _progress.value = _progress.value.copy(running = true)
 
-        val imuJob = async { imuCapture.record(seconds) }
+        val motionJob = async { motionCapture.capture(seconds) }
         val audioJob = async {
             audioCapture.record(seconds) { fraction, chunk ->
                 pushWaveform(chunk)
@@ -62,16 +61,12 @@ class CaptureCoordinator(
         }
 
         val audio = audioJob.await()
-        val imu = imuJob.await()
+        val motion = motionJob.await()
         _progress.value = _progress.value.copy(running = false, fraction = 1f, secondsLeft = 0)
 
         when (audio) {
             is Outcome.Err -> audio
-            is Outcome.Ok -> {
-                val imuReading = (imu as? Outcome.Ok)?.value
-                if (imu is Outcome.Err) Logx.w("IMU capture failed, continuing audio-only: ${imu.message}")
-                Outcome.Ok(RawCapture(audio.value.samples, audio.value.source, imuReading))
-            }
+            is Outcome.Ok -> Outcome.Ok(RawCapture(audio.value.samples, audio.value.source, motion))
         }
     }
 

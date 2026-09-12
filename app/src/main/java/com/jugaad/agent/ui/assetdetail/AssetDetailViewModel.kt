@@ -2,10 +2,12 @@ package com.jugaad.agent.ui.assetdetail
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.jugaad.agent.core.Outcome
 import com.jugaad.agent.di.ServiceLocator
 import com.jugaad.agent.domain.model.Asset
 import com.jugaad.agent.domain.model.Baseline
 import com.jugaad.agent.domain.model.Diagnosis
+import com.jugaad.agent.domain.usecase.CalibrationRecord
 import com.jugaad.agent.ml.anomaly.Thresholds
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -27,7 +29,20 @@ class AssetDetailViewModel(
     val baseline = MutableStateFlow<Baseline?>(null)
     val latest = MutableStateFlow<Diagnosis?>(null)
 
-    init { refresh() }
+    // Calibrate thresholds / drift / reference-refresh (v4). The section is disabled in the
+    // UI when the FL sample store hasn't finished loading yet (calibrationAvailable).
+    val calibration = MutableStateFlow<CalibrationRecord?>(null)
+    val calibrating = MutableStateFlow(false)
+    val calibrateMessage = MutableStateFlow<String?>(null)
+    val canRefresh = MutableStateFlow(0)
+    val refreshing = MutableStateFlow(false)
+    val calibrationAvailable: Boolean get() = services.flRuntime.value?.store != null
+
+    init {
+        refresh()
+        refreshCalibration()
+        refreshBaselineEligibility()
+    }
 
     fun refresh() {
         viewModelScope.launch {
@@ -36,11 +51,66 @@ class AssetDetailViewModel(
         }
     }
 
+    fun refreshCalibration() {
+        viewModelScope.launch {
+            calibration.value = services.calibrateUseCase()?.observe(assetId)
+        }
+    }
+
+    fun refreshBaselineEligibility() {
+        viewModelScope.launch {
+            canRefresh.value = services.refreshBaselineUseCase()?.canRefresh(assetId) ?: 0
+        }
+    }
+
+    fun calibrate() {
+        if (calibrating.value) return
+        val useCase = services.calibrateUseCase() ?: return
+        calibrating.value = true
+        viewModelScope.launch {
+            when (val outcome = useCase.apply(assetId)) {
+                is Outcome.Ok -> {
+                    calibration.value = outcome.value
+                    calibrateMessage.value = "Thresholds updated: T1 %.1f, T2 %.1f".format(outcome.value.t1, outcome.value.t2)
+                }
+                is Outcome.Err -> calibrateMessage.value = "Calibration failed: ${outcome.message}"
+            }
+            calibrating.value = false
+        }
+    }
+
+    fun refreshBaseline() {
+        if (refreshing.value) return
+        val useCase = services.refreshBaselineUseCase() ?: return
+        refreshing.value = true
+        viewModelScope.launch {
+            when (val outcome = useCase.refresh(assetId)) {
+                is Outcome.Ok -> {
+                    baseline.value = outcome.value
+                    calibrateMessage.value = "Reference measurement refreshed"
+                    refreshBaselineEligibility()
+                }
+                is Outcome.Err -> calibrateMessage.value = "Refresh failed: ${outcome.message}"
+            }
+            refreshing.value = false
+        }
+    }
+
+    fun dismissCalibrateMessage() {
+        calibrateMessage.value = null
+    }
+
     fun updateThresholds(t1: Double, t2: Double) {
         viewModelScope.launch {
             runCatching { Thresholds(t1, t2) }.getOrNull()?.let {
                 services.assetRepository.updateThresholds(assetId, it)
             }
+        }
+    }
+
+    fun setBenchTest(v: Boolean) {
+        viewModelScope.launch {
+            asset.value?.let { services.assetRepository.updateAsset(it.copy(benchTest = v)) }
         }
     }
 

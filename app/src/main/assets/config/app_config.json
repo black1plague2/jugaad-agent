@@ -1,0 +1,92 @@
+{
+  "thresholds": {
+    "t1": 2.0,
+    "t2": 4.0,
+    "spreadFloor": 0.02
+  },
+  "calibration": {
+    "auto": true,
+    "k1": 3.0,
+    "k2": 6.0,
+    "minHealthy": 5,
+    "healthyQuantile": 0.9,
+    "driftWindow": 8,
+    "driftRatio": 0.5,
+    "autoRefreshBaseline": true,
+    "refreshMinHealthy": 6
+  },
+  "sensors": {
+    "zWeights": {
+      "accel": 1.0,
+      "gyro": 0.8,
+      "mag": 0.5,
+      "magRms": 0.5
+    },
+    "zFloor": 0.02,
+    "sensorScoreScale": 0.5
+  },
+  "promotion": {
+    "margin": 0.03,
+    "winsRequired": 2,
+    "minNVal": 8,
+    "historyLen": 8
+  },
+  "acceptGuard": {
+    "minTrain": 5,
+    "maxDrop": 0.10
+  },
+  "training": {
+    "maxEpochs": 30,
+    "fixedEpochs": 10,
+    "patience": 5,
+    "minVal": 4,
+    "batch": 8
+  },
+  "recipes": {
+    "noiseSigma": 0.15,
+    "distillAlpha": 0.99,
+    "distillMinConf": 0.9,
+    "uncertainTrigger": 0.6,
+    "uncertainFloor": 0.1
+  },
+  "sync": {
+    "port": 8988,
+    "windowMs": 5000,
+    "connectTimeoutMs": 5000,
+    "readTimeoutMs": 30000,
+    "schedulerMinutes": 15,
+    "staleMinutes": 30,
+    "retryBackoffMs": [2000, 5000, 15000],
+    "failoverAfterFailures": 3,
+    "autoFailover": true
+  },
+  "sharing": {
+    "enabled": true,
+    "maxPoolSamples": 5000,
+    "maxPerOrigin": 1500,
+    "batchSize": 200
+  },
+  "budget": {
+    "maxThreads": 4,
+    "thermalMax": 2,
+    "minBatteryPct": 15
+  },
+  "ranking": {
+    "costPerMs": 0.002,
+    "unlabelledBonus": 2.0
+  },
+  "diagnosis": {
+    "minConfidence": 0.5,
+    "maxIssues": 3
+  },
+  "features": {
+    "schemaVersion": 3,
+    "bandGroups": {
+      "low": [20, 150],
+      "mid": [150, 1200],
+      "high": [1200, 6000],
+      "veryHigh": [6000, 11000]
+    },
+    "lineHz": [50, 100]
+  }
+}

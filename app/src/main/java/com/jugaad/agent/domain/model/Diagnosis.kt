@@ -16,12 +16,18 @@ data class Diagnosis(
     val status: MachineStatus,
     val imuIndex: Double,
     val dominantHz: Double,
+    /** Which side of [com.jugaad.agent.ml.anomaly.AnomalyScorer.Result] drove the score: "acoustic" or "sensor". */
+    val dominantSource: String = "acoustic",
+    val sensorScore: Double = 0.0,
 
     // --- CNN path (present only when a model is loaded AND status != Healthy) --
     val faultClass: FaultClass? = null,
     val faultConfidence: Float = 0f,
     val backend: InferenceBackend = InferenceBackend.NONE,
     val inferenceMs: Long = 0L,
+
+    // --- Rule-based issue suggestions (empty when Healthy) -----------------
+    val issues: List<IssueSuggestion> = emptyList(),
 
     // --- LLM / template advice --------------------------------------------
     val advice: String = "",

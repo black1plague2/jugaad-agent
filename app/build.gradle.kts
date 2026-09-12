@@ -76,6 +76,11 @@ android {
         noCompress += setOf("pte", "task", "bin", "tflite")
     }
 
+    testOptions {
+        // JVM tests exercise code that logs through android.util.Log.
+        unitTests.isReturnDefaultValues = true
+    }
+
     lint {
         // Runtime permission gates are enforced in MainActivity before navigation;
         // don't let @RequiresPermission lint fail the hackathon release build.
@@ -112,6 +117,11 @@ dependencies {
 
     // FFT for the log-mel front-end.
     implementation(libs.jtransforms)
+
+    // On-device federated learning: LiteRT signature-based inference/training,
+    // WorkManager for the periodic sync schedule (consumed by the p2p package).
+    implementation(libs.tensorflow.lite)
+    implementation(libs.androidx.work.runtime.ktx)
 
     testImplementation(libs.junit)
 

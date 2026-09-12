@@ -1,5 +1,6 @@
 *.iml
 .gradle/
+.kotlin/
 .idea/
 build/
 /local.properties
@@ -16,6 +17,15 @@ app/src/main/assets/models/*.task
 app/src/main/assets/models/*.bin
 ml/.venv/
 ml/out/
-ml/data/
+ml/data/*
+!ml/data/*.md
 __pycache__/
 *.pyc
+
+# Device-test evidence: keep the reports, not the screenshots, UI dumps or sample pulls.
+tools/devtest*/*
+!tools/devtest*/*.md
+# Field pulls stay out of git; their README stays in.
+!ml/data/field/
+ml/data/field/*
+!ml/data/field/*.md

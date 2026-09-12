@@ -4,5 +4,6 @@ package com.jugaad.agent.domain.model
 enum class InferenceBackend(val shortLabel: String, val longLabel: String) {
     NONE("—", "Anomaly only"),
     CPU("CPU", "ExecuTorch · XNNPACK (CPU)"),
-    NPU("NPU", "ExecuTorch · QNN (Hexagon NPU)");
+    NPU("NPU", "ExecuTorch · QNN (Hexagon NPU)"),
+    LITERT("CPU", "LiteRT · federated head (CPU)");
 }
