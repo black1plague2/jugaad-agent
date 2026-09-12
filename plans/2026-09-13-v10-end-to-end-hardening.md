@@ -202,3 +202,49 @@ on `iQOO coffee` shows "3 of 6 healthy readings with full features"; auto-labell
 a reading scoring at or under `0.5 * t1` (1.0 with the current defaults), which is why 0.92, 0.56
 and 0.95 were labelled automatically and 1.04, 1.35, 1.84, 1.92 and 4.46 were not. Two more quiet
 readings, or two manual confirmations on the Result screen, will trip calibration.
+
+### Training loop proven end to end with a second class (190 tests)
+
+Real fault data cannot be invented, but the stack that consumes it can be proved. A new
+integration test, `app/src/test/java/com/jugaad/agent/fl/TwoClassLearningIntegrationTest.kt`,
+drives the genuine training path with a separable two-class synthetic set sized so that both
+splits clear the app's own gates:
+
+- `nTrain` and `nVal` are both non-zero and `valAcc` is a real number, **1.0 (8 of 8)**, not the
+  -1 sentinel;
+- fresh held-out vectors from each cluster classify correctly as HEALTHY and ROTOR_IMBALANCE;
+- the single-class detector correctly does NOT fire on the two-class set, and DOES fire on the
+  all-HEALTHY set where `trainAcc` is the vacuous 1.0.
+
+Honest limit: this exercises `CentroidStrategy`, which genuinely runs off device. `VariantTrainer`
+wraps a real `org.tensorflow.lite.Interpreter` over a `.tflite` asset and cannot load on a plain
+JVM, which is why no existing test covers it either. So the LiteRT-backed variants remain proved
+only by the on-device round counters and by `ml/fl/fedavg_sim.py` (merged accuracy 0.817, 0.907,
+0.950, 0.977, 0.980) and `ml/fl/network_sim.py` (promoted `noise` in round 2), both exit 0.
+
+### D11, an untrained class can win a centroid prediction (found, not fixed)
+
+`fl/CentroidStrategy.kt:55-56` keeps the previous centroid for any class with no samples this
+round, and a class never seen keeps its initial all-zero centroid. `predict` at `:131-138` then
+scans all `FlConstants.N_CLASSES` and takes the nearest centroid with no notion of whether a class
+was ever trained:
+
+```kotlin
+for (cls in 0 until FlConstants.N_CLASSES) {
+    val d = squaredDistance(x, c, cls)
+    if (d < bestDist) { bestDist = d; best = cls }
+}
+```
+
+The features are baseline-relative deltas, so a healthy machine sits near the origin, which is
+exactly where an untrained centroid sits. The model can therefore return a fault class it has
+never seen one example of. This showed up empirically while writing the integration test: with the
+clusters placed near zero the held-out accuracy fell to 0.875 and the single-class `trainAcc` to
+0.667, because low-valued HEALTHY samples were pulled to the stale zero centroid. Moving both
+clusters away from the origin removed it.
+
+Live relevance: the fleet has only class 0 samples, so the ROTOR_IMBALANCE and AIRFLOW_OBSTRUCTION
+centroids are both all-zero right now. It only reaches a user while `centroid` is champion, and the
+champion is `base`, but promotion can select `centroid`. Left unfixed because masking untrained
+classes changes model semantics, which is the founder's call; the fix is to exclude classes with no
+training history from `predict` and `classify` rather than let the origin act as a magnet.
