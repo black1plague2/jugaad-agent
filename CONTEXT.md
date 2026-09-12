@@ -55,8 +55,10 @@ no cloud. Hardware: three iQOO 15 (Snapdragon 8 Elite Gen 5, 16 GB), Android 16.
 Nothing below is in git. The app builds with the Gradle wrapper (`gradlew`, `gradlew.bat`, the
 wrapper jar are committed).
 
-1. JDK 17 (Temurin works). The system Java on the founder's laptop is a JRE 8, so always export
-   `JAVA_HOME` before `./gradlew`.
+1. A JDK 17 or 21. Temurin 17 works; so does the JBR bundled with Android Studio
+   (`<studio>/jbr`, openjdk 21.0.10), which is what the 13 Sep session used. The source and jvm
+   targets stay at 17 either way. Never rely on the system Java: export `JAVA_HOME` before every
+   `./gradlew`.
 2. Android SDK command-line tools; accept licences; install `platform-tools`, `platforms;android-35` and a
    build-tools 35.x (`compileSdk = 35`, `minSdk = 29` in `app/build.gradle.kts`). Write `local.properties` with `sdk.dir=<absolute path>` (forward slashes on Windows).
 3. Build and test:
@@ -66,9 +68,25 @@ export JAVA_HOME=/path/to/jdk17; export PATH="$JAVA_HOME/bin:$PATH"
 ./gradlew :app:assembleDebug :app:testDebugUnitTest
 ```
 
-   Expected: green build, 171/171 JVM tests (as of 2026-09-12 22:1x). The APK is
+   Expected: green build, **194/194 JVM tests** (as of 2026-09-13 03:xx). The APK is
    `app/build/outputs/apk/debug/app-debug.apk`, package `com.jugaad.agent.debug`, activity
    `com.jugaad.agent.MainActivity`.
+
+   Two traps that cost a whole session on a fresh Windows machine:
+
+   - **`java.io.IOException: Unable to establish loopback connection`.** On some Windows builds
+     (seen on 10.0.26200) Gradle cannot open its own selector because the JDK's AF_UNIX socketpair
+     fails. The workaround is a tiny javaagent that forces
+     `sun.nio.ch.UnixDomainSockets.supported` to false, and it has to reach **three** JVMs: the
+     launcher (via `JAVA_OPTS`), the daemon (via `-Dorg.gradle.jvmargs`, because the repo's own
+     `gradle.properties` overrides any user-level one), and the forked test JVM (via an init
+     script adding `jvmArgs`, or `:app:testDebugUnitTest` fails on its own socket to the daemon).
+     If your machine does not have this bug, ignore all of it and just run `./gradlew`.
+   - **`INSTALL_FAILED_UPDATE_INCOMPATIBLE`.** The app is signed with each machine's own
+     `~/.android/debug.keystore`, which is not in git. Installing from a different machine than
+     the one that last installed needs `adb uninstall` first, which wipes the phone's data, so
+     **tar `files/` off the phone and restore it afterwards** (see "Moving the app to a phone
+     from a new machine" below).
 4. Python is only needed to re-bake the on-device heads or to run the network simulator:
    Python 3.12, `python -m venv ml/.venv`, TensorFlow 2.16.1 (must match the LiteRT runtime
    version in `gradle/libs.versions.toml`). Scripts: `ml/fl/export_fl_head.py` (bake heads),
@@ -111,35 +129,64 @@ ls files/fl` (`samples.jsonl`, `shared_samples.jsonl`, `node.json`, `network.jso
 weights), `files/assets/<id>/` (equipment, baseline, `calibration.json`). Evidence from past passes lives in `tools/devtestN/REPORT.md`; the PNGs
 are not committed.
 
-## Where things stand (2026-09-12, 22:2x IST)
+## Where things stand (2026-09-13, 03:xx IST)
 
-- v1 to v7 are implemented and built: APK sha256 prefix `4f255d832ddaace1`, 171/171 JVM tests. All
-  three phones run it on a wiped learning state (node names regenerate as `I2501-xxxx`; rename
-  under Group settings); equipment on the phones is bench-flagged only.
-- v6 and v7 (latest): phones on the same WiFi find the owner by node name over mDNS
-  (`p2p/LanDiscovery.kt`, Devices > "Nearby on this WiFi") and join it automatically
-  (`p2p/AutoJoin.kt`): tap "Serve as owner" on one phone, the others sync to it within seconds
-  and every 60 s after. Verified end to end on the three phones, `tools/devtest9/REPORT.md`.
-  WiFi Direct remains for no-router use.
-- The full change set since the initial commit `0b6ab1d` is committed in one commit on top of
-  it (this file's commit). The on-device verification passes are summarised in `HANDOFF.md`
-  ("Verified on hardware") and in each plan's Result section.
-- The v5.1 fixes are now verified on hardware (E12, `tools/devtest10/REPORT.md`): recovery from
-  a corrupt `network.json`, Pre-check scroll and the magnetometer row, the hidden bench
-  calibration card and single-line chips and nav labels all pass. The failover banner failed and
-  was fixed: a stale self-owned WiFi Direct group suppressed it (`ui/network/Format.kt:46` now
-  gates on `ui.serving`). A mid-word wrap of the device name on the equipment list was fixed in
-  the same pass (`ui/assets/AssetListScreen.kt:151`). All three phones carry that build
-  (`25182085859111ae`). A debug APK built on another laptop is signed with a different key, so
-  each phone needed an uninstall and reinstall; app data was tarred and restored, and going back
-  to a founder-signed build needs one uninstall per phone. The fleet is configured with C as the
-  sole owner and A and B as clients; a phone whose `node.json` has `"lastRole": "OWNER"` restores
-  its owner service on launch, so check that on every phone before a demo to avoid two owners.
-- Open items: the founder's reading of "SAP conventions" (implemented as Plant-Maintenance
-  vocabulary, visual language replaced by the Humane Minimalist Dark theme on request); after a
-  failover the other clients must Discover and Connect to the new owner by hand; Airflow
-  Obstruction has no public labelled data; the provenance rebuild and the Office Kit rehearsal
-  are unchanged from the original handoff (`HACKATHON.md`, `DEMO.md`).
+- v1 to v11 implemented. APK sha256 prefix **`22b407f044f01379`**, **194/194 JVM tests**, installed
+  on all three phones. Verified on hardware, not inferred.
+- **Real field data exists now.** Phone A carries the coffee-machine capture: 8 pieces of
+  equipment (the whole drinks menu: Hot water, Tea, Strong Coffee, iQOO coffee, Hot Milk, Black
+  Coffee, Strong Tea, Black Tea), every one with a `baseline.json`, and 8 readings on
+  `iQOO coffee` (7 Healthy, 1 Critical at score 4.46 which produced three ranked catalogue issues).
+  Phone B has 3 equipment and 7 samples, phone C 1 and 3. **Do not wipe these.**
+- **The single blocker for classification is a second class.** Every label on the fleet is class 0
+  (HEALTHY). Until `ROTOR_IMBALANCE` or `AIRFLOW_OBSTRUCTION` examples are captured off a real
+  machine, `trainAcc` reads a vacuous 1.0 and `valAcc` stays at the -1 sentinel, no promotion can
+  fire, and the classifier cannot classify. That is a data gap, not a code gap: the whole path
+  below it is tested (`TwoClassLearningIntegrationTest` trains a genuine two-class set to
+  `valAcc 1.0` with correct held-out inference). See `plans/2026-09-13-v9-first-real-dataset.md`
+  for the capture targets.
+- Auto-labelling only fires for a reading scoring at or under `0.5 * t1` (1.0 with the current
+  defaults), which is why three of A's eight readings labelled themselves and the rest did not.
+  Manual labels come from "Confirm label" on the Result screen.
+- Calibration has not run on any asset. It needs `calibration.minHealthy` (5) samples with
+  `label == 0` on that one asset; `iQOO coffee` has 3 and the detail screen shows the progress.
+  Until it runs, thresholds stay at the untuned defaults T1 2.0 / T2 4.0, and since that machine's
+  healthy spread is 0.56 to 1.92 nothing ever lands in the WARNING band.
+- Federated state: C (`I2501-fd22`) is owner, A (`I2501-f0c7`) and B (`I2501-a783`) are clients,
+  registry holds exactly 3 nodes. The zero-sample merge guard is active and visible in logcat as
+  `fl sync: skipping base, no trained samples this round`, with round counters correctly held.
+- Known risk, unfixed by choice: with every screen asleep the OS freezes the owner process despite
+  its foreground service (`dumpsys power` shows the wake lock `DISABLED ... mIsFrozen`) and clients
+  time out on port 8988. Fine for a demo where someone is holding a phone. Unattended syncing would
+  need `dumpsys deviceidle whitelist +com.jugaad.agent.debug`, which was deliberately not applied.
+- Open items unchanged: the founder's reading of "SAP conventions"; after a failover clients must
+  Discover and Connect to the new owner by hand; Airflow Obstruction has no public labelled data;
+  the provenance rebuild and the Office Kit rehearsal (`HACKATHON.md`, `DEMO.md`).
+
+## Moving the app to a phone from a new machine
+
+Because the debug keystore is per machine, a build from a different laptop cannot update an
+existing install. Back up, uninstall, install, restore:
+
+```bash
+adb -s <dev> exec-out run-as com.jugaad.agent.debug tar -c files > phone.tar   # back up first
+adb -s <dev> uninstall com.jugaad.agent.debug
+adb -s <dev> install -g app/build/outputs/apk/debug/app-debug.apk
+adb -s <dev> shell am start -n com.jugaad.agent.debug/com.jugaad.agent.MainActivity   # creates files/
+adb -s <dev> shell am force-stop com.jugaad.agent.debug
+adb -s <dev> push phone.tar /sdcard/p.tar
+adb -s <dev> shell "cat /sdcard/p.tar | run-as com.jugaad.agent.debug tar -x"
+adb -s <dev> shell rm /sdcard/p.tar
+```
+
+Then check the restore: equipment count, `baseline.json` per asset, history record count and
+`wc -l files/fl/samples.jsonl`. `install -g` grants RECORD_AUDIO so the Pre-check passes without a
+manual permission tap.
+
+**Never wipe a phone to get out of trouble without asking.** `tools/reset-phones.sh` with no
+`--keep-equipment` deletes equipment and the captured readings. It also resets phones one at a
+time, so a freshly wiped phone can re-sync poisoned or stale state from a peer that has not been
+wiped yet; wipe with nobody serving as owner, or wipe all phones before relaunching any of them.
 
 ## Map of the code
 

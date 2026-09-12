@@ -1,4 +1,4 @@
-# Jugaad Agent, handoff (state as of 2026-09-12, 22:1x IST)
+# Jugaad Agent, handoff (state as of 2026-09-13, 03:xx IST)
 
 Offline, on-device condition monitoring for rotating machines: a phone on the housing records
 microphone + accelerometer + gyroscope + magnetometer, compares each reading with the machine's own
@@ -85,6 +85,32 @@ binding contracts and each ends with a "Result" section of verified facts.
   I2501-acba / 3 active devices / 1 owner", and no phone logged a `FATAL EXCEPTION`. Worth
   checking `node.json` on each phone before a demo: a phone whose `lastRole` is OWNER restores its
   owner service on launch, which is how the two-owner state arose.
+
+## Start here in a new session
+
+1. `git pull`, then read `CONTEXT.md` (toolchain, phones, the two build traps, how to move the app
+   to a phone from a different machine) and this file, then `FEDERATED.md`.
+2. Build: `export JAVA_HOME=<jdk17-or-21>; ./gradlew :app:assembleDebug :app:testDebugUnitTest`.
+   Expect **194/194**. Current APK sha256 prefix `22b407f044f01379`, installed on all three phones.
+3. `adb connect` the phones (IPs below) and confirm the installed sha before changing anything.
+4. **The phones hold real, unreplaceable data. Do not wipe them.** Phone A carries the
+   coffee-machine capture: 8 equipment with baselines and 8 readings on `iQOO coffee`. Back up with
+   `run-as ... tar -c files` before anything destructive.
+5. The one thing blocking the product is a second fault class. Everything downstream of it is built
+   and tested. Capture targets: `plans/2026-09-13-v9-first-real-dataset.md`.
+
+## What is actually true right now
+
+- 194 JVM tests green; v8, v10 and v11 fixes all verified on hardware.
+- Federated: C `I2501-fd22` owner, A `I2501-f0c7` and B `I2501-a783` clients, registry exactly 3
+  nodes, zero-sample merges correctly skipped without advancing round counters.
+- Every label on the fleet is class 0, so `trainAcc` 1.0 is vacuous and `valAcc` is the -1
+  sentinel. No promotion can fire. This is a data gap.
+- No asset is calibrated; `iQOO coffee` has 3 of the 5 labelled-healthy samples it needs. Auto
+  labelling only fires at `score <= 0.5 * t1`, so quiet readings label themselves and borderline
+  ones need "Confirm label" on the Result screen.
+- With all screens asleep the owner's process is frozen by the OS and syncing stalls. Deliberately
+  not worked around; see the v10 notes.
 
 ## Device access
 
