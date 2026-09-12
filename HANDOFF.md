@@ -70,9 +70,21 @@ binding contracts and each ends with a "Result" section of verified facts.
   `EngineBanner` had no weight (`ui/assets/AssetListScreen.kt:151`). Still open: a client sync
   merge discards the startup RECOVER event, so Resilience can read "Repaired: network.json" above
   "No recovery or failover events yet". 171/171 JVM tests. Report:
-  `tools/devtest10/REPORT.md`. Phone A runs the fixed build `25182085859111ae`; B and C were left
-  untouched on `4f255d832ddaace1` because this laptop lacks the founder's debug keystore, so
-  installing on A needed an uninstall (its data was tarred and restored).
+  `tools/devtest10/REPORT.md`. All three phones now run the fixed build `25182085859111ae`. This
+  laptop lacks the founder's debug keystore, so each phone had to be uninstalled and reinstalled
+  (`INSTALL_FAILED_UPDATE_INCOMPATIBLE` on `install -r`); `files/` was tarred and restored on each,
+  and equipment, baselines, history, weights and node identities were all verified back in place.
+  Going back to a founder-signed build needs one uninstall per phone.
+- Fleet state after that reinstall (E12, 23:0x phone clock): A and C both came back as owners
+  because both had `"lastRole": "OWNER"`, and B could not reach A
+  (`SocketTimeoutException ... port 8988 ... after 5000ms`; `ping` from B averaged 485 ms to A
+  against 93 ms to C). A also held a stale WiFi Direct group that `removeGroup` refused to drop
+  (`BUSY`), cleared with the detached WiFi cycle from `tools/reset-phones.sh`. Resolved to a single
+  owner: C serves (`fl sync: owner 4 node(s) merged [base, deep]`), A and B are clients with
+  `consecutiveSyncFailures 0` pointing at 192.168.66.134, B reads "Synchronized / Joined
+  I2501-acba / 3 active devices / 1 owner", and no phone logged a `FATAL EXCEPTION`. Worth
+  checking `node.json` on each phone before a demo: a phone whose `lastRole` is OWNER restores its
+  owner service on launch, which is how the two-owner state arose.
 
 ## Device access
 

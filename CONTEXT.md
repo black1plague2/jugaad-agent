@@ -129,9 +129,12 @@ are not committed.
   calibration card and single-line chips and nav labels all pass. The failover banner failed and
   was fixed: a stale self-owned WiFi Direct group suppressed it (`ui/network/Format.kt:46` now
   gates on `ui.serving`). A mid-word wrap of the device name on the equipment list was fixed in
-  the same pass (`ui/assets/AssetListScreen.kt:151`). Phone A carries that build
-  (`25182085859111ae`); B and C are still on `4f255d832ddaace1`, since a debug APK built on
-  another laptop is signed with a different key and needs an uninstall to install.
+  the same pass (`ui/assets/AssetListScreen.kt:151`). All three phones carry that build
+  (`25182085859111ae`). A debug APK built on another laptop is signed with a different key, so
+  each phone needed an uninstall and reinstall; app data was tarred and restored, and going back
+  to a founder-signed build needs one uninstall per phone. The fleet is configured with C as the
+  sole owner and A and B as clients; a phone whose `node.json` has `"lastRole": "OWNER"` restores
+  its owner service on launch, so check that on every phone before a demo to avoid two owners.
 - Open items: the founder's reading of "SAP conventions" (implemented as Plant-Maintenance
   vocabulary, visual language replaced by the Humane Minimalist Dark theme on request); after a
   failover the other clients must Discover and Connect to the new owner by hand; Airflow

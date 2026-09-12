@@ -10,9 +10,11 @@ phones with `sha256sum $(pm path com.jugaad.agent.debug)` before anything was to
 rebuild of the same commit `89f7f6c`: green, 171/171 JVM tests (counted from the 34 JUnit XML
 files in `app/build/test-results/testDebugUnitTest`).
 
-Equipment on A is bench-flagged only: `f204cdc4` "Coffee machine (bench)", `"benchTest": true`.
-No reading was taken in this pass and `files/fl` on A holds no `samples.jsonl` or
-`shared_samples.jsonl` at all, so nothing here could reach training, sharing or calibration.
+All equipment on the fleet is bench-flagged: A has `f204cdc4` "Coffee machine (bench)", B has
+`eed6065d` "iQOO coffee" and `e518dd7a` "iQOO laptop", C has none, and every `asset.json` present
+reads `"benchTest": true`. No reading was taken in this pass, and `ls files/fl` on all three
+phones matched no `*sample*` file at all, so nothing here could reach training, sharing or
+calibration.
 
 | # | Item | Result | Evidence |
 |---|---|---|---|
@@ -80,18 +82,60 @@ network.json" directly above "No recovery or failover events yet".
 
 ## Phone state after this pass
 
-- Phone A runs `25182085859111ae` (commit `89f7f6c` plus the two fixes above). This laptop does
-  not have the founder's debug keystore, so `adb install -r` failed with
-  `INSTALL_FAILED_UPDATE_INCOMPATIBLE` and A had to be uninstalled and reinstalled. `files/` was
-  tarred first (38 entries) and restored after: equipment `f204cdc4` with `"benchTest": true`,
-  its baseline, its 3 history records and every `weights_*.bin` / `metrics_*.json` are back, and
-  the two `network.json.corrupt-*` test artefacts were deleted afterwards. Going back to a
-  founder-signed build needs one uninstall on A.
-- Phones B and C were not touched and still run `4f255d832ddaace1`.
-- A's sync service was left stopped (it was stopped to test the banner); A's `node.json` still
-  has `"lastRole": "OWNER"`, so it will serve again on next launch.
-- A's pre-corruption event history is gone: the first corruption run wiped it and the list
-  refilled from the owner on the next merge.
+All three phones run the fixed build `25182085859111ae` (commit `89f7f6c` plus the two fixes
+above), confirmed with `sha256sum $(pm path com.jugaad.agent.debug)` on each. This laptop does not
+have the founder's debug keystore, so `adb install -r` failed with
+`INSTALL_FAILED_UPDATE_INCOMPATIBLE` on every phone and each had to be uninstalled and
+reinstalled. `files/` was tarred first and restored after, and each restore was verified:
+
+| Phone | Backup | Restored state |
+|---|---|---|
+| A | 38 entries | `f204cdc4` "Coffee machine (bench)" `"benchTest": true`, its baseline, 3 history records, all `weights_*.bin` / `metrics_*.json`, node identity `I2501-6e00` |
+| B | 48 entries | `eed6065d` "iQOO coffee" and `e518dd7a` "iQOO laptop", both `"benchTest": true`, 17 fl files, node identity `I2501-6402` |
+| C | 25 entries | no equipment (it had none), 17 fl files, node identity `I2501-acba` (`acbace15`) |
+
+Going back to a founder-signed build needs one uninstall per phone.
+
+No phone has a `samples.jsonl` or `shared_samples.jsonl`, and no reading was taken at any point in
+this pass, so nothing here reached training, sharing or calibration.
+
+## Fleet configuration after the reinstall
+
+The reinstall left the fleet in an illogical state that had to be sorted out, and the diagnosis is
+worth keeping:
+
+- A and C both came up as owners, each advertising and listening on 8988, because both had
+  `"lastRole": "OWNER"` in `node.json` and restore their owner service on launch.
+- B could not sync with A at all: `fl sync: client failed: SocketTimeoutException: failed to
+  connect to /192.168.66.250 (port 8988) ... after 5000ms`, repeatedly. A was genuinely listening
+  (`/proc/net/tcp` state 0A on port 0x231C) and reachable, but `ping` from B measured
+  min/avg/max 16.8 / 485.3 / 1415.2 ms to A against 57.6 / 92.7 / 120.4 ms to C, so connects were
+  timing out on latency rather than on a closed port.
+- A also held a stale WiFi Direct group (Network tab "Role: Owner", "Owner address:
+  192.168.49.1"). "Leave group" could not clear it: `WifiDirectManager: removeGroup failed (BUSY)`
+  on two attempts, and `createGroup failed (ERROR)` on the next launch. The documented remedy
+  worked: the detached WiFi cycle from `tools/reset-phones.sh`
+  (`nohup sh -c 'sleep 1; svc wifi disable; sleep 4; svc wifi enable' &`) plus an adb reconnect.
+  Afterwards `ip -4 addr` on A showed only `wlan0 192.168.66.250`, with no `p2p0`, and the Network
+  tab read Role "Not connected".
+- Resolved by stopping A's sync service and syncing it to C once: A logged
+  `auto-join: syncing with 'I2501-acba' at 192.168.66.134` then
+  `fl sync: client variants=[base], rounds {base=37} -> {base=41}`.
+
+End state, all verified: C is the sole owner (`"lastRole": "OWNER"`, 3 listening sockets on 8988,
+`fl sync: owner 4 node(s) merged [base, deep]`); A and B are both
+`"lastRole": "CLIENT", consecutiveSyncFailures 0, lastOwnerAddress 192.168.66.134`; B's Devices
+tab reads "Synchronized", "Joined I2501-acba, next sync in 15 s", "3 active devices" and
+"Nearby on this WiFi: 1 owner" (`E12_19_B_devices_converged.png`); the owner-unreachable banner is
+correctly absent. No `FATAL EXCEPTION` in logcat on any of the three.
+
+The `EngineBanner` fix was re-confirmed on B and C independently: the device-name node measures
+180 tall and 573 wide on both, the same as on A (`E12_20_B_home.png`, `E12_21_C_home.png`).
+
+Note for the next session: A and B each still show one listening socket on 8988 as clients, and
+both had `"lastRole": "OWNER"` restore an owner service on launch after the reinstall. If a single
+owner matters for a demo, check `node.json` on every phone before starting rather than trusting
+the Devices tab alone.
 
 ## Build notes for this laptop
 
