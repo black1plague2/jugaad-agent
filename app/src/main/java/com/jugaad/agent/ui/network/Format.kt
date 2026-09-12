@@ -37,11 +37,14 @@ internal fun ownerUnreachableMessage(consecutiveSyncFailures: Int): String =
     "Owner unreachable ($consecutiveSyncFailures failed syncs): Discover and Connect to another node, or promote this node in Group settings"
 
 /** Shown on both the Devices and Network tabs once client syncs start failing, so a stuck
- * node's owner can be re-discovered or this node promoted without digging into logs. */
+ * node's owner can be re-discovered or this node promoted without digging into logs. Gated on
+ * [NetworkUiState.serving] rather than [ui.group.isGroupOwner], since a stale self-owned WiFi
+ * Direct group can leave this node reporting owner while it is not actually serving anyone,
+ * same as the "formed" group case already handled in [syncStatus]. */
 @Composable
 internal fun OwnerUnreachableBanner(ui: NetworkUiState) {
     val failures = ui.config?.consecutiveSyncFailures ?: 0
-    if (failures < 1 || ui.group.isGroupOwner) return
+    if (failures < 1 || ui.serving) return
     FioriBanner(ownerUnreachableMessage(failures), semantic = Semantic.CRITICAL)
 }
 

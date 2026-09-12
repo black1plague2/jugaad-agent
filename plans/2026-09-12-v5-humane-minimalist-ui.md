@@ -168,3 +168,34 @@ Build green, unit tests unchanged; screenshots of all four federated screens, gr
 equipment list, detail, result (with heatmap) and history on a phone in portrait and the
 Performance screen in landscape; the transferred pre-flight items above checked by grep (dashes,
 hard-coded colours outside theme/common) and by eye on the screenshots.
+
+## Result, defect pass re-verified on hardware (E12, 2026-09-12, 22:2x-22:4x)
+
+The five fixes that E8 never got to are now checked on a phone. Report and evidence:
+`tools/devtest10/REPORT.md`. Build under test `4f255d832ddaace1`, confirmed installed on A, B and
+C before anything was touched; 171/171 JVM tests on commit `89f7f6c`.
+
+- PASS, recovery from a corrupt `network.json`: quarantined as `network.json.corrupt-<ts>` with
+  both `Recovery:` log lines, a fresh state written, and Group settings showing the "Repaired"
+  row and the "repaired corrupt file: network.json" event.
+- PASS, Pre-check: a single screen-level scroller (one scrollable node 2958 tall) and a
+  Magnetometer row reading 92.2 Hz, Available.
+- PASS, bench calibration card hidden, verified both ways: absent on the bench asset, present
+  again with the bench flag off, flag restored afterwards. No reading was taken, and A has no
+  `samples.jsonl`, so nothing entered training.
+- PASS, single-line chips and nav labels: all four nav labels and every status chip measure one
+  line tall at native resolution.
+- FAIL, the owner-unreachable banner: suppressed by a stale self-owned WiFi Direct group.
+  `OwnerUnreachableBanner` returned early on `ui.group.isGroupOwner`, so a node with
+  `lastRole CLIENT`, `consecutiveSyncFailures 1` and `fl sync: client failed` in the log showed
+  the "Sync failed" chip and no banner. Fixed in `ui/network/Format.kt:46` by gating on
+  `ui.serving`, the same staleness correction E10 made for `syncStatus`. Re-verified with the
+  stale group still held: the banner renders on both tabs, and stays hidden while actually
+  serving.
+
+Two further defects found in passing. Fixed: `EngineBanner` on the equipment list starved its
+weighted device-name Column, so "Snapdragon 8 Elite Gen 5" broke mid-word across four lines
+("Snapdr", "agon 8", "Elite", "Gen 5"); the right Column now carries a weight too
+(`ui/assets/AssetListScreen.kt:151`). Left for the founder: a client sync merge replaces the local
+event list with the owner's and so discards the startup RECOVER event, which is why Resilience can
+read "Repaired: network.json" directly above "No recovery or failover events yet".

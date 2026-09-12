@@ -148,7 +148,9 @@ private fun EngineBanner(socName: String, cnn: String, cnnReady: Boolean, gemmaR
             Text("DEVICE", color = FioriColors.TextDisabled, style = MaterialTheme.typography.labelMedium)
             Text(socName, color = FioriColors.TextPrimary, fontWeight = FontWeight.SemiBold)
         }
-        Column(horizontalAlignment = Alignment.End) {
+        // Weighted like the left Column, otherwise this side is measured first at its intrinsic
+        // width and starves the device name column, forcing it to wrap mid-word.
+        Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.End) {
             Text(
                 "CNN · $cnn",
                 color = if (cnnReady) FioriColors.Positive else FioriColors.TextSecondary,
