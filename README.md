@@ -171,6 +171,8 @@ other phones report "Joined <name>" and the owner count "3 active devices". Full
 | `HACKATHON.md` | Provenance rule, judging plan |
 | `plans/` | Contracts v1 to v6 with verified Result sections |
 | `ml/data/DATASETS.md` | Public dataset survey and why MAFAULDA |
+| `PRIVACY.md` | What the app records, what it keeps, what it sends, and to whom |
+| `NOTICE.md` | Third-party licences and the MAFAULDA provenance note |
 | `docs/PROJECT_STATE.md` | The original 10 Sep status document (superseded by HANDOFF.md) |
 
 ## Status
@@ -181,3 +183,12 @@ automatic discovery and joining by node name, failover, recovery, the bench guar
 Humane Minimalist Dark UI. Open: the v5.1 UI fixes are covered by tests but their on-device
 re-check was cut short, Airflow Obstruction has no public labelled data (learnt from technician
 labels), and phones on an access point with client isolation must use WiFi Direct.
+
+## Scope and limits
+
+Jugaad Agent is an advisory tool. It supports a technician's decision and is not a protection
+function: it never trips, interlocks or shuts down equipment, and must not be wired to anything
+that does. Scores are relative to each machine's own reference measurement; the app does not
+claim calibrated vibration severity in mm/s or any ISO 20816 zone. It is not for hazardous
+(explosive) areas: a consumer phone is not Ex rated, and Zone 1/2 sites need IECEx, ATEX or PESO
+approved hardware. Privacy and data handling are in PRIVACY.md; third-party licences in NOTICE.md.
