@@ -156,3 +156,23 @@ Verified on phone A: a throwaway non-bench Very high item got a reference, then 
 one unlabelled sample (samples 8 to 9; unlabelled samples are never shared). Deleting it through the
 dialog logged `asset delete: removed 1 own and 0 pooled samples for 25e6580c`, the folder was gone,
 samples returned to 8, equipment to 8, and neither B nor C held any reference to `25e6580c`.
+
+## Result, orphaned-sample removal and bench flags on phone C (2026-09-13, founder's request)
+
+Bench flags, at the founder's request, through each item's bench switch on phone C: "iPhone box
+texting" (`9abe5f8b`), "laptop" (`a9eaf8a6`) and "dabba" (`c3efd7a7`) now read
+`"benchTest": true`, thresholds and sensitivity unchanged. "boxxxx" (`661c07b6`) was not in the
+request and is left non-bench. Earlier samples from the three stay in training.
+
+Orphaned samples, at the founder's request. An orphan is a sample whose `assetId` exists on none of
+the three phones; the fleet held 15 asset ids and exactly one orphan source, the deleted `712b007c`:
+26 samples in C's `samples.jsonl`, 6 in A's `shared_samples.jsonl`, 6 in B's. Procedure: tar backup
+of `files/` on all three; `am force-stop` on all three so no sync could re-share an orphan; files
+re-read from the stopped state; only lines with that `assetId` removed; the three changed files
+written back and confirmed byte-exact by md5 (A pool `f8af6ee8...`, B pool `ba09c707...`, C store
+`00c59593...`). C relaunched on its own mid-procedure, so it was stopped again and its file
+re-verified unchanged before all three were restarted together.
+
+After restart and a sync cycle: `712b007c` count 0 in every store and pool; A own 8 / pool 4
+(was 10), B own 7 / pool 5 (was 11), C own 41 (39 after removal plus 2 new founder readings) /
+pool 5; coffee-machine samples unchanged; no `FATAL EXCEPTION` on any phone.
