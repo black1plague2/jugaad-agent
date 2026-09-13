@@ -18,6 +18,7 @@ import com.jugaad.agent.fl.NetworkState
 import com.jugaad.agent.fl.NodeCard
 import com.jugaad.agent.fl.NodeConfig
 import com.jugaad.agent.fl.NodeMode
+import com.jugaad.agent.fl.NodeRole
 import com.jugaad.agent.fl.Recovery
 import com.jugaad.agent.fl.TrainBudget
 import com.jugaad.agent.fl.VariantMetrics
@@ -352,8 +353,29 @@ class NetworkViewModel(
 
     // --- Sync ------------------------------------------------------------------
 
-    fun startServing() = FlSyncService.start(appContext)
-    fun stopServing() = FlSyncService.stop(appContext)
+    /** Manual serve also clears any opt-out left over from an earlier Stop (v14 follow-up,
+     * D3/D4 fix): serving again is the clearest possible signal that this node should be a
+     * takeover candidate once more. */
+    fun startServing() {
+        withRuntime { it.updateConfig { c -> c.copy(servingOptOutUntilMs = 0) } }
+        FlSyncService.start(appContext)
+    }
+
+    /** D3 (v14 plan): stopping must also persist lastRole CLIENT, or the Network tab keeps
+     * reading Role Owner and the phone resumes serving on next launch even though it stopped.
+     * Also opts this node out of automatic takeover for [Failover.STOP_OPT_OUT_MS] (v14
+     * follow-up, D3/D4 fix): otherwise this phone's own syncs fail immediately after Stop and it
+     * can reach the failover threshold, including AutoJoin's "+2" override, before the true
+     * lowest-id node reacts, becoming owner again 30-60 s later. It still syncs as a client
+     * normally during the opt-out; only automatic takeover is suppressed. */
+    fun stopServing() {
+        FlSyncService.stop(appContext)
+        withRuntime {
+            it.updateConfig { c ->
+                c.copy(lastRole = NodeRole.CLIENT, servingOptOutUntilMs = System.currentTimeMillis() + Failover.STOP_OPT_OUT_MS)
+            }
+        }
+    }
 
     /** Routed through [SyncNow.asClient] (not a direct [com.jugaad.agent.p2p.FedAvgCoordinator]
      * call) so a manual tap counts failures/triggers failover exactly like the scheduler does. */

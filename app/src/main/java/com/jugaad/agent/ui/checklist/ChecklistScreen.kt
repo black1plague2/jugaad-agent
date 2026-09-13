@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.hardware.Sensor
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -28,8 +29,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jugaad.agent.core.Constants
 import com.jugaad.agent.sensor.MotionCapture
+import com.jugaad.agent.ui.common.KeepScreenOn
+import com.jugaad.agent.ui.common.PreRoll
+import com.jugaad.agent.ui.common.PreRollOverlay
 import com.jugaad.agent.ui.common.SectionCard
 import com.jugaad.agent.ui.common.fiori.FioriColors
 import com.jugaad.agent.ui.common.fiori.FioriObjectCell
@@ -40,7 +45,6 @@ import com.jugaad.agent.ui.common.fiori.PrimaryButton
 import com.jugaad.agent.ui.common.fiori.Semantic
 import com.jugaad.agent.ui.common.fiori.StatusChip
 import com.jugaad.agent.ui.services
-import kotlinx.coroutines.launch
 
 private enum class Check { PASS, FAIL, UNKNOWN }
 
@@ -64,13 +68,25 @@ fun ChecklistScreen(
     var hasBaseline by remember { mutableStateOf(Check.UNKNOWN) }
     var running by remember { mutableStateOf(false) }
 
+    // The "resting still" check reads the accelerometer while the technician is expected to have
+    // let go of the phone, so "Run checks" gets the same get-ready countdown as a real recording.
+    // Tied to rememberCoroutineScope() (not a ViewModel, this screen doesn't have one) so leaving
+    // the screen cancels it and no probe runs after navigating away.
+    val preRoll = remember { PreRoll(scope, "resting check") }
+    val preRollSecondsLeft by preRoll.secondsLeft.collectAsStateWithLifecycle()
+
     fun runChecks() {
         running = true
-        scope.launch {
+        preRoll.start {
             hasBaseline = if (services.assetRepository.getBaseline(assetId) != null) Check.PASS else Check.FAIL
             resting = if (services.imuCapture.isRestingStill()) Check.PASS else Check.FAIL
             running = false
         }
+    }
+
+    fun cancelChecks() {
+        preRoll.cancel()
+        running = false
     }
 
     // The reference measurement is a stored file, not a live probe like "resting still", so it
@@ -114,9 +130,12 @@ fun ChecklistScreen(
     // 1 s sensor probe's state update recomposes SensorsSection without resetting scroll offset.
     val scrollState = rememberScrollState()
 
+    KeepScreenOn(keepOn = preRollSecondsLeft != null)
+
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { pad ->
+        Box(Modifier.fillMaxSize().padding(pad)) {
         Column(
-            Modifier.fillMaxSize().padding(pad).verticalScroll(scrollState).padding(20.dp),
+            Modifier.fillMaxSize().verticalScroll(scrollState).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Text("Pre-check", style = MaterialTheme.typography.headlineMedium, color = FioriColors.TextPrimary)
@@ -157,6 +176,11 @@ fun ChecklistScreen(
             TextButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
                 Text("Back", color = FioriColors.TextSecondary)
             }
+        }
+
+        preRollSecondsLeft?.let { seconds ->
+            PreRollOverlay(secondsLeft = seconds, onCancel = ::cancelChecks)
+        }
         }
     }
 }

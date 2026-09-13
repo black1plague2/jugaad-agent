@@ -21,6 +21,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.jugaad.agent.ui.common.CaptureOverlay
+import com.jugaad.agent.ui.common.KeepScreenOn
+import com.jugaad.agent.ui.common.PreRollOverlay
 import com.jugaad.agent.ui.common.SectionCard
 import com.jugaad.agent.ui.common.WaveformView
 import com.jugaad.agent.ui.common.fiori.FioriColors
@@ -39,6 +41,9 @@ fun BaselineScreen(
     val vm: BaselineViewModel = viewModel(factory = vmFactory { BaselineViewModel(services, assetId) })
     val phase by vm.phase.collectAsStateWithLifecycle()
     val progress by vm.progress.collectAsStateWithLifecycle()
+    val preRollSecondsLeft by vm.preRollSecondsLeft.collectAsStateWithLifecycle()
+
+    KeepScreenOn(keepOn = preRollSecondsLeft != null || progress.running)
 
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { pad ->
         Box(Modifier.fillMaxSize().padding(pad)) {
@@ -89,7 +94,12 @@ fun BaselineScreen(
                 }
             }
 
-            if (progress.running) {
+            if (preRollSecondsLeft != null) {
+                PreRollOverlay(
+                    secondsLeft = preRollSecondsLeft ?: 0,
+                    onCancel = vm::cancelPreRoll,
+                )
+            } else if (progress.running) {
                 CaptureOverlay(
                     progress = progress,
                     label = when (val p = phase) {

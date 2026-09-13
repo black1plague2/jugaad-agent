@@ -228,4 +228,65 @@ class FailoverTest {
         // second, redundant path to takeover never opens up for the node already electing itself.
         assertFalse(Failover.shouldTakeOverAfterFailedRetry(shouldTakeOverNow = false, isLowestCandidate = true, noLiveOwnerAttempts = 5))
     }
+
+    // --- Failover.optedOut / the manual-stop opt-out gate (v14 follow-up, D3/D4 fix) ---
+
+    @Test
+    fun optedOutTrueInsideTheWindow() {
+        val config = nodeConfig("aaa00001", failures = 0).copy(servingOptOutUntilMs = 10_000L)
+        assertTrue(Failover.optedOut(config, nowMs = 9_999L))
+    }
+
+    @Test
+    fun optedOutFalseOnceTheWindowPasses() {
+        val config = nodeConfig("aaa00001", failures = 0).copy(servingOptOutUntilMs = 10_000L)
+        assertFalse(Failover.optedOut(config, nowMs = 10_000L))
+        assertFalse(Failover.optedOut(config, nowMs = 10_001L))
+    }
+
+    @Test
+    fun optedOutFalseWhenCleared() {
+        val config = nodeConfig("aaa00001", failures = 0).copy(servingOptOutUntilMs = 0)
+        assertFalse(Failover.optedOut(config, nowMs = 0L))
+    }
+
+    @Test
+    fun shouldTakeOverFalseWhileOptedOutEvenWhenItWouldOtherwiseTakeOver() {
+        // Same fleet shape as lowestDeviceIdAmongFreshNodesTakesOver, which asserts true without
+        // the opt-out; only the opt-out window differs here.
+        val network = NetworkState.empty().copy(
+            nodes = listOf(
+                card("owner01", isOwner = true, lastSeenMs = 0L),
+                card("ccc00003", isOwner = false, lastSeenMs = 1000L),
+            ),
+        )
+        val config = nodeConfig("aaa00001", failures = 3).copy(servingOptOutUntilMs = 5000L)
+
+        assertFalse(Failover.shouldTakeOver(config, network, nowMs = 1000L, cfg = cfg()))
+    }
+
+    @Test
+    fun shouldTakeOverAfterFailedRetryOverrideSuppressedWhileOptedOut() {
+        // Same inputs as higherIdOverridesOnlyAfterTwoFailedRetriesWithNoLiveOwner, which returns
+        // true without the opt-out flag; opting out must suppress the override too.
+        assertFalse(
+            Failover.shouldTakeOverAfterFailedRetry(
+                shouldTakeOverNow = false, isLowestCandidate = false, noLiveOwnerAttempts = 2, optedOut = true,
+            ),
+        )
+    }
+
+    @Test
+    fun shouldTakeOverAfterFailedRetryNormalRulesApplyWhenOptOutCleared() {
+        assertTrue(
+            Failover.shouldTakeOverAfterFailedRetry(
+                shouldTakeOverNow = false, isLowestCandidate = false, noLiveOwnerAttempts = 2, optedOut = false,
+            ),
+        )
+        assertTrue(
+            Failover.shouldTakeOverAfterFailedRetry(
+                shouldTakeOverNow = true, isLowestCandidate = true, noLiveOwnerAttempts = 0, optedOut = false,
+            ),
+        )
+    }
 }

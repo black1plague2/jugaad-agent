@@ -12,6 +12,9 @@ import androidx.core.content.ContextCompat
 import com.jugaad.agent.core.Logx
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.coroutines.resume
 
 /**
  * Thin wrapper around [WifiP2pManager] for the FL peer-sync feature.
@@ -108,6 +111,60 @@ class WifiDirectManager(private val context: Context) {
     fun removeGroup() {
         val ch = channel ?: return
         manager?.removeGroup(ch, actionListener("removeGroup"))
+    }
+
+    /**
+     * D4 (v14 plan): call when this phone is leaving OWNER mode, so it doesn't keep advertising
+     * (and stay joinable) a WiFi Direct group nobody is serving behind anymore. Works even when
+     * the caller never held a live [WifiDirectManager] for the group in question (e.g. one
+     * created by [Failover.takeOver]'s own short-lived manager): [start] initialises the channel
+     * if needed, then this reads current connection info fresh rather than trusting any cached
+     * [group] state, and only removes the group when this phone actually is the owner of a
+     * formed one. Never throws.
+     */
+    suspend fun removeGroupIfOwner() {
+        val mgr = manager ?: return
+        start()
+        val ch = channel ?: return
+
+        val info = try {
+            withTimeoutOrNull(3000) {
+                suspendCancellableCoroutine<GroupInfo> { cont ->
+                    mgr.requestConnectionInfo(ch) { i ->
+                        if (cont.isActive) {
+                            cont.resume(
+                                GroupInfo(
+                                    formed = i.groupFormed,
+                                    isGroupOwner = i.isGroupOwner,
+                                    ownerAddress = i.groupOwnerAddress?.hostAddress,
+                                ),
+                            )
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Logx.w("WifiDirectManager: removeGroupIfOwner failed to read connection info", e)
+            null
+        }
+
+        if (info == null || !info.formed || !info.isGroupOwner) return
+
+        try {
+            mgr.removeGroup(
+                ch,
+                object : WifiP2pManager.ActionListener {
+                    override fun onSuccess() {
+                        Logx.i("p2p: removed own group after leaving owner mode")
+                    }
+                    override fun onFailure(reason: Int) {
+                        Logx.w("WifiDirectManager: removeGroupIfOwner's removeGroup failed (${reasonToString(reason)})")
+                    }
+                },
+            )
+        } catch (e: Exception) {
+            Logx.w("WifiDirectManager: removeGroupIfOwner threw", e)
+        }
     }
 
     private fun actionListener(op: String) = object : WifiP2pManager.ActionListener {
