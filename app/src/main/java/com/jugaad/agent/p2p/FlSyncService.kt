@@ -208,17 +208,23 @@ class FlSyncService : Service() {
         SyncBus.mode.value = MeshMode.CLIENT
     }
 
-    /** Tears down everything OWNER mode holds; safe to call repeatedly (idempotent) since the
-     * mesh loop calls it on every CLIENT-mode iteration. */
+    /**
+     * Tears down everything OWNER mode holds; safe to call repeatedly (idempotent, via the guard
+     * below) since the mesh loop calls it on every CLIENT-mode iteration but must only actually
+     * act on the transition out of OWNER. Also drops this phone's WiFi Direct group if it is the
+     * owner of one (D4 in the v14 plan): otherwise the group stays formed and joinable with
+     * nobody serving behind it, after a step-down, a "Stop", or a takeover error.
+     */
     private fun releaseOwnerResources() {
-        if (server == null && wifiManager == null && wakeLock == null && wifiLock == null && !SyncBus.serving.value) return
+        val hadOwnerResources = server != null || wifiManager != null || wakeLock != null || wifiLock != null || SyncBus.serving.value
+        if (!hadOwnerResources) return
         try {
             server?.close()
         } catch (e: IOException) {
             Logx.w("FlSyncService: error closing server socket", e)
         }
         server = null
-        wifiManager?.stop()
+        val leavingManager = wifiManager
         wifiManager = null
         applicationContext.services().lanDiscovery.stopAdvertising()
         wakeLock?.let { if (it.isHeld) it.release() }
@@ -227,6 +233,20 @@ class FlSyncService : Service() {
         wifiLock = null
         pendingStepDownId = null
         SyncBus.serving.value = false
+
+        // Runs on its own short-lived scope, independent of this service's `scope`, so it still
+        // completes even when this is called from onDestroy right before `scope.cancel()`. Works
+        // even when this phone never held its own manager for the current group (e.g. one
+        // Failover.takeOver created with a short-lived manager of its own): removeGroupIfOwner
+        // reads live connection info fresh rather than relying on a cached field here.
+        CoroutineScope(Dispatchers.IO).launch {
+            val manager = leavingManager ?: WifiDirectManager(applicationContext)
+            try {
+                manager.removeGroupIfOwner()
+            } finally {
+                manager.stop()
+            }
+        }
     }
 
     override fun onDestroy() {

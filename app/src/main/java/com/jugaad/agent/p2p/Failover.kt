@@ -23,9 +23,37 @@ object Failover {
 
     private const val STEP_DELAY_MS = 500L
 
+    /** How long a manual "Stop" opts this node out of automatic takeover (v14 follow-up,
+     * D3/D4 fix): on-device, the phone that just stopped serving fails its own syncs
+     * immediately (its lastOwnerAddress points at itself, a non-owner) and can reach the
+     * failover threshold, including the "+2" override, before the true lowest id notices on its
+     * own slower interval, so it ends up owner again ~30-60 s after Stop. See [optedOut]. */
+    const val STOP_OPT_OUT_MS = 300_000L
+
+    /** Pure gate checked by every automatic takeover path (SyncNow's shouldTakeOver/takeOver
+     * path and AutoJoin's TryFailover, including its "+2" override): while this is true, this
+     * node still syncs as a client normally but never takes over on its own. Cleared by manually
+     * starting to serve again ([com.jugaad.agent.fl.NodeConfig.servingOptOutUntilMs] set to 0). */
+    fun optedOut(config: NodeConfig, nowMs: Long): Boolean = nowMs < config.servingOptOutUntilMs
+
+    /** Last opt-out window we already logged a suppression for, so a node that keeps failing its
+     * client syncs every retry for the whole 300 s doesn't spam Logx once per attempt. */
+    private var lastSuppressionLogMs = -1L
+
+    private fun logSuppressedOnce(config: NodeConfig) {
+        if (lastSuppressionLogMs != config.servingOptOutUntilMs) {
+            lastSuppressionLogMs = config.servingOptOutUntilMs
+            Logx.i("failover: automatic takeover suppressed, opted out after manual stop")
+        }
+    }
+
     /** Pure decision so it can be table-tested without WiFi Direct or a real FlRuntime. */
     fun shouldTakeOver(config: NodeConfig, network: NetworkState, nowMs: Long, cfg: AppConfig): Boolean {
         if (!cfg.sync.autoFailover) return false
+        if (optedOut(config, nowMs)) {
+            logSuppressedOnce(config)
+            return false
+        }
         if (config.consecutiveSyncFailures < cfg.sync.failoverAfterFailures) return false
         return isLowestCandidate(config, network, nowMs, cfg.sync.staleMinutes)
     }
@@ -100,6 +128,17 @@ object Failover {
     fun shouldTakeOverAfterFailedRetry(shouldTakeOverNow: Boolean, isLowestCandidate: Boolean, noLiveOwnerAttempts: Int): Boolean =
         shouldTakeOverNow || (!isLowestCandidate && noLiveOwnerAttempts >= 2)
 
+    /** Same as the 3-arg overload but also gated on the manual-stop opt-out (v14 follow-up):
+     * [AutoJoin]'s TryFailover step calls this one so its "+2" override can't fire either while
+     * this node opted out of automatic takeover, even once its own no-live-owner streak would
+     * otherwise justify it. */
+    fun shouldTakeOverAfterFailedRetry(
+        shouldTakeOverNow: Boolean,
+        isLowestCandidate: Boolean,
+        noLiveOwnerAttempts: Int,
+        optedOut: Boolean,
+    ): Boolean = !optedOut && shouldTakeOverAfterFailedRetry(shouldTakeOverNow, isLowestCandidate, noLiveOwnerAttempts)
+
     /**
      * Requests OWNER mode in-process via [FlSyncService.requestOwner] first (v13 plan §7): if
      * the mesh service is already running this never touches `startForegroundService`, so a
@@ -128,7 +167,11 @@ object Failover {
                 manager.stop()
             }
 
-            flRuntime.updateConfig { it.copy(lastRole = NodeRole.OWNER, consecutiveSyncFailures = 0) }
+            // Clears any manual-stop opt-out (D3/D4 follow-up): this path serves both the manual
+            // "Promote this node to owner" action, which is explicit and must always clear it,
+            // and every automatic takeover, which only reaches here once optedOut is already
+            // false anyway, so clearing to 0 is a no-op there.
+            flRuntime.updateConfig { it.copy(lastRole = NodeRole.OWNER, consecutiveSyncFailures = 0, servingOptOutUntilMs = 0) }
             flRuntime.addEvent(EventType.FAILOVER, "owner unreachable, ${flRuntime.config.value.name} took over")
             true
         } catch (e: CancellationException) {

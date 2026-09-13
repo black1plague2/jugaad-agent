@@ -61,11 +61,17 @@ fun CaptureOverlay(
             verticalArrangement = Arrangement.spacedBy(28.dp),
         ) {
             Text(
-                label.uppercase(),
+                "Recording".uppercase(),
                 color = Accent,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 1.5.sp,
                 style = MaterialTheme.typography.labelLarge,
+            )
+
+            Text(
+                label,
+                color = TextMid,
+                style = MaterialTheme.typography.bodyMedium,
             )
 
             Box(contentAlignment = Alignment.Center) {

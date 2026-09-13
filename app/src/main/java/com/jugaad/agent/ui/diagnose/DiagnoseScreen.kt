@@ -24,6 +24,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.jugaad.agent.ui.common.CaptureOverlay
+import com.jugaad.agent.ui.common.KeepScreenOn
+import com.jugaad.agent.ui.common.PreRollOverlay
 import com.jugaad.agent.ui.common.SectionCard
 import com.jugaad.agent.ui.common.WaveformView
 import com.jugaad.agent.ui.common.fiori.FioriColors
@@ -42,6 +44,9 @@ fun DiagnoseScreen(
     val vm: DiagnoseViewModel = viewModel(factory = vmFactory { DiagnoseViewModel(services, assetId) })
     val phase by vm.phase.collectAsStateWithLifecycle()
     val progress by vm.progress.collectAsStateWithLifecycle()
+    val preRollSecondsLeft by vm.preRollSecondsLeft.collectAsStateWithLifecycle()
+
+    KeepScreenOn(keepOn = preRollSecondsLeft != null || progress.running)
 
     LaunchedEffect(progress.running, progress.fraction) {
         if (!progress.running && progress.fraction >= 1f) vm.markAnalyzing()
@@ -100,7 +105,12 @@ fun DiagnoseScreen(
                 }
             }
 
-            if (progress.running) {
+            if (preRollSecondsLeft != null) {
+                PreRollOverlay(
+                    secondsLeft = preRollSecondsLeft ?: 0,
+                    onCancel = vm::cancelPreRoll,
+                )
+            } else if (progress.running) {
                 CaptureOverlay(progress = progress, label = "Reading")
             } else if (phase == DiagnoseViewModel.Phase.Analyzing) {
                 Box(

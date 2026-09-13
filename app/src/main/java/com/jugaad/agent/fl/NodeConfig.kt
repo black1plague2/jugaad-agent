@@ -32,6 +32,11 @@ data class NodeConfig(
     val consecutiveSyncFailures: Int = 0,
     /** Whether this node contributes its own labelled samples to peers (v4 §5). */
     val shareSamples: Boolean = true,
+    /** Set by a manual "Stop" (v14 follow-up, D3/D4 fix): this node never takes over
+     * automatically while `now < servingOptOutUntilMs`, so stopping doesn't just hand ownership
+     * right back via failover a few seconds later. Cleared (0) by manually starting to serve
+     * again. See [com.jugaad.agent.p2p.Failover.optedOut]. */
+    val servingOptOutUntilMs: Long = 0,
 )
 
 /** Loads/saves [NodeConfig], migrating `deviceId` from v1's `fl/state.json` on first run. */

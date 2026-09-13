@@ -152,9 +152,10 @@ class AutoJoin(
                             val bumped = me.consecutiveSyncFailures + 1
                             runtime.updateConfig { it.copy(consecutiveSyncFailures = bumped) }
                             val fullCfg = ConfigStore.effective.value
+                            val optedOut = Failover.optedOut(runtime.config.value, System.currentTimeMillis())
                             val takeoverNow = Failover.shouldTakeOver(runtime.config.value, runtime.network.value, System.currentTimeMillis(), fullCfg)
                             val isLowest = Failover.isLowestCandidate(runtime.config.value, runtime.network.value, System.currentTimeMillis(), fullCfg.sync.staleMinutes)
-                            if (Failover.shouldTakeOverAfterFailedRetry(takeoverNow, isLowest, noLiveOwnerAttempts)) {
+                            if (Failover.shouldTakeOverAfterFailedRetry(takeoverNow, isLowest, noLiveOwnerAttempts, optedOut)) {
                                 Logx.i("failover: no owner appeared, taking over")
                                 val took = Failover.takeOver(context)
                                 lastAttemptFailed = !took
