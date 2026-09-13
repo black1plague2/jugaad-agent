@@ -100,3 +100,40 @@ Verified on the phones:
 
 Not yet exercised on hardware: a reading on a Very high asset, and the detail-screen sensitivity
 change. A vibrating-box demo should be created with the bench flag on.
+
+## Result, hardware pass (2026-09-13, 10:4x-11:0x phone clock)
+
+Three defects found on the phones and fixed; final APK `878eeb35cc4a7a2a`, 246/246 JVM tests, on
+A, B and C via `install -r`. All 14 original assets read back identical before and after, and the
+bench test asset used here was deleted through its confirmation dialog afterwards.
+
+1. **Create equipment could not be completed.** The form was a fixed Column; the three
+   Sensitivity options pushed the bench switch, "Create equipment" and Cancel below the screen and
+   swipes did nothing. The form now scrolls (the machine-type result list is height-capped, so the
+   nested scroll is safe). Verified: bench switch and Create reachable, a bench "Small or light
+   object" created with `t1 0.5, t2 1.0, VERY_HIGH, benchTest true`.
+2. **Sensitivity was applied twice.** On one untouched phone and one reference, Very high read
+   `CRITICAL score=19.27` and Standard `HEALTHY score=1.13`: scaling the spread and z floors on top
+   of the thresholds amplified the score 17x, dividing by 3-clip noise-sized stds (gyroIndexStd
+   0.0098, magRmsStd 0.0032). The floors are no longer scaled; score is sensitivity-independent
+   (tested), and a re-recorded reference saves `spread=0.0200` instead of `0.0050`.
+3. **The profile factors sat below resting measurement noise.** Five still readings scored 0.90,
+   1.12, 1.12, 1.97 and 6.36, so Very high 0.5 / 1.0 read Critical four times in five. Factors are
+   now High 0.75 (1.5 / 3.0) and Very high 0.5 (1.0 / 2.0), with a test encoding those scores.
+
+What the scores track: every score here is the sensor score and follows the vibration index. Quiet
+desk readings (imu 0.10 to 0.23) scored 0.90 to 2.05; readings while the desk was disturbed (imu
+0.40 to 0.45) scored 6.4 to 7.5, against a reference imu of 0.150. With the retuned Very high, quiet
+readings land Healthy or Warning and real vibration lands Critical; one quiet reading at 2.05 just
+crossed the 2.0 critical line. Thresholds cannot flag a change smaller than resting noise; reducing
+that noise (longer captures, more reference clips) is the lever for finer detection, not thresholds.
+
+Also verified on hardware in this pass: the reference measurement pre-roll (`preroll: done` then
+three clips back to back with no tap), the reading pre-roll auto-navigating to its result, and the
+detail-screen sensitivity change rescaling and persisting (Very high 0.5/1.0 to Standard 2.0/4.0).
+
+v14 follow-up, verified on hardware the same morning: two owners healed by themselves (A
+`owner: yielding to I2501-a783, lower id` then `p2p: removed own group after leaving owner mode`).
+Stop on owner B at 10:50:01 persisted `lastRole CLIENT` and a 297 s opt-out, logged
+`failover: automatic takeover suppressed, opted out after manual stop` at 10:50:06, and B's 8988
+listener stayed at 0 for 180 s while A took over at 10:51:09 and B and C joined A as clients.

@@ -177,9 +177,10 @@ class AnomalyScorer(
         private val SENSOR_NAMES = arrayOf("accel", "gyro", "mag", "magRms")
         private val ZERO_SENSOR_DELTAS = DoubleArray(SENSOR_NAMES.size)
 
-        /** Base (Standard-sensitivity) noise floor for the healthy-cluster radius, before a
-         *  per-asset [com.jugaad.agent.domain.model.Sensitivity.factor] is applied by the caller
-         *  that knows the asset (see CaptureBaselineUseCase / RefreshBaselineUseCase). */
+        /** Global noise floor for the healthy-cluster radius. Sensitivity does NOT scale this —
+         *  only the t1/t2 thresholds and calibration multipliers scale with a per-asset
+         *  [com.jugaad.agent.domain.model.Sensitivity.factor]; scaling this floor too would
+         *  divide the score by a shrinking denominator on top of falling thresholds. */
         const val SPREAD_FLOOR_BASE = 0.02
     }
 }

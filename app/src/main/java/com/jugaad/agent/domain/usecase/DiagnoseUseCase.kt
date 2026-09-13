@@ -65,11 +65,9 @@ class DiagnoseUseCase(
         }
 
         val a = features.analyze(cap.audio, cap.motion)
-        // Per-asset sensitivity scales the sensor z-floor for this reading without mutating the
-        // shared ConfigStore instance: a local copy, applied only to this call's cfg argument.
-        val baseConfig = cfg()
-        val f = asset.sensitivity.factor
-        val appConfig = baseConfig.copy(sensors = baseConfig.sensors.copy(zFloor = baseConfig.sensors.zFloor * f))
+        // Sensitivity only moves thresholds (defaults + calibration), never the score floors:
+        // the shared config is used as-is, same as before v16.
+        val appConfig = cfg()
 
         val baseStats = AnomalyScorer.BaselineStats(
             mean = baseline.meanFeature,
