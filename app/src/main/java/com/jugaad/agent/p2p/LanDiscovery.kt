@@ -136,9 +136,15 @@ class LanDiscovery(context: Context) {
     companion object {
         const val SERVICE_TYPE = "_jugaad-fl._tcp."
 
-        /** Which advertised owner a client syncs to when nobody picked one by hand: the last
-         * owner if it is still visible, else the only one visible, else none (the user chooses). */
-        fun pickOwner(peers: List<LanPeer>, lastOwnerAddress: String?): LanPeer? =
-            peers.firstOrNull { it.host == lastOwnerAddress } ?: peers.singleOrNull()
+        /** Which advertised owner a client syncs to when nobody picked one by hand (v13 plan §4):
+         * the lowest-deviceId owner confirmed alive by [OwnerProbe] ([liveOwnerIds], populated by
+         * the caller before calling this), so a frozen owner's stale mDNS record never wins over
+         * one that actually answered; else the last owner if it is still visible; else the only
+         * one visible; else none (the user chooses under Nearby). */
+        fun pickOwner(peers: List<LanPeer>, lastOwnerAddress: String?, liveOwnerIds: Set<String> = emptySet()): LanPeer? {
+            val live = peers.filter { it.deviceId in liveOwnerIds }
+            if (live.isNotEmpty()) return live.minByOrNull { it.deviceId }
+            return peers.firstOrNull { it.host == lastOwnerAddress } ?: peers.singleOrNull()
+        }
     }
 }

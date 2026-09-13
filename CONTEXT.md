@@ -68,7 +68,7 @@ export JAVA_HOME=/path/to/jdk17; export PATH="$JAVA_HOME/bin:$PATH"
 ./gradlew :app:assembleDebug :app:testDebugUnitTest
 ```
 
-   Expected: green build, **194/194 JVM tests** (as of 2026-09-13 03:xx). The APK is
+   Expected: green build, **226/226 JVM tests** (as of 2026-09-13 09:01). The APK is
    `app/build/outputs/apk/debug/app-debug.apk`, package `com.jugaad.agent.debug`, activity
    `com.jugaad.agent.MainActivity`.
 
@@ -131,7 +131,7 @@ are not committed.
 
 ## Where things stand (2026-09-13, 03:xx IST)
 
-- v1 to v11 implemented. APK sha256 prefix **`22b407f044f01379`**, **194/194 JVM tests**, installed
+- v1 to v13 implemented. APK sha256 prefix **`8b16736736b1d236`**, **226/226 JVM tests**, installed
   on all three phones. Verified on hardware, not inferred.
 - **Real field data exists now.** Phone A carries the coffee-machine capture: 8 pieces of
   equipment (the whole drinks menu: Hot water, Tea, Strong Coffee, iQOO coffee, Hot Milk, Black
@@ -152,7 +152,7 @@ are not committed.
   `label == 0` on that one asset; `iQOO coffee` has 3 and the detail screen shows the progress.
   Until it runs, thresholds stay at the untuned defaults T1 2.0 / T2 4.0, and since that machine's
   healthy spread is 0.56 to 1.92 nothing ever lands in the WARNING band.
-- Federated state: C (`I2501-fd22`) is owner, A (`I2501-f0c7`) and B (`I2501-a783`) are clients,
+- Federated state (v13): B (`I2501-a783`) is owner, A (`I2501-f0c7`) and C (`I2501-fd22`) are clients,
   registry holds exactly 3 nodes. The zero-sample merge guard is active and visible in logcat as
   `fl sync: skipping base, no trained samples this round`, with round counters correctly held.
 - Known risk, unfixed by choice: with every screen asleep the OS freezes the owner process despite

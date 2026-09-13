@@ -1,5 +1,10 @@
 package com.jugaad.agent.ui.network
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.PowerManager
+import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -14,10 +19,19 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.jugaad.agent.domain.model.FaultClass
 import com.jugaad.agent.ui.common.fiori.FioriColors
 import com.jugaad.agent.ui.common.fiori.FioriEmptyState
@@ -44,6 +58,7 @@ fun DevicesTab(
     ) {
         OwnerUnreachableBanner(ui)
         HeaderCard(ui, vm, runWithWifiPermission, runWithServicePermission)
+        BatteryOptimizationRow()
         NearbySection(ui, vm)
         PeersSection(ui, runWithWifiPermission, vm)
         DatasetOverviewSection(ui)
@@ -119,6 +134,60 @@ private fun HeaderCard(
             }
         }
     }
+}
+
+/** "Keep syncing with screen off" row (v13 plan §6, H5): opens the system dialog that exempts
+ * this app from battery optimizations, so a sleeping owner still answers PING/HELLO from peers.
+ * Re-checks the exemption on resume, since the user grants or revokes it outside this screen. */
+@Composable
+private fun BatteryOptimizationRow() {
+    val ctx = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var exempt by remember { mutableStateOf(isIgnoringBatteryOptimizations(ctx)) }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                exempt = isIgnoringBatteryOptimizations(ctx)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(FioriColors.Surface).padding(16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text("Keep syncing with screen off", color = FioriColors.TextPrimary, style = MaterialTheme.typography.titleLarge)
+            Text(
+                "Relaxes battery limits for syncing. Some phones still pause the app while the screen is off, so keep screens on during a sync.",
+                color = FioriColors.TextSecondary,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+        if (exempt) {
+            StatusChip(text = "On", semantic = Semantic.POSITIVE)
+        } else {
+            GhostButton(
+                text = "Allow",
+                onClick = {
+                    val intent = Intent(
+                        Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                        Uri.parse("package:${ctx.packageName}"),
+                    )
+                    ctx.startActivity(intent)
+                },
+            )
+        }
+    }
+}
+
+private fun isIgnoringBatteryOptimizations(ctx: Context): Boolean {
+    val pm = ctx.getSystemService(PowerManager::class.java) ?: return false
+    return pm.isIgnoringBatteryOptimizations(ctx.packageName)
 }
 
 @Composable

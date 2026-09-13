@@ -237,16 +237,30 @@ class FedAvgCoordinator(private val peer: FlPeer) {
         val ownerDeviceId = peer.config.deviceId
         val sockets = mutableListOf<Socket>()
         try {
-            val first = try {
-                server.accept()
-            } catch (e: SocketTimeoutException) {
-                return@withContext SyncResult(
-                    SyncRole.GROUP_OWNER, 0, emptyList(), emptyMap(), emptyMap(), emptyMap(), emptyMap(), emptyMap(), null, "idle",
-                )
+            // A PING never starts (or counts toward) the merge window: keep accepting until a
+            // real HELLO client shows up, or the server's own accept() times out first (idle).
+            var first: Socket? = null
+            val rawSessions = mutableListOf<ClientSession>()
+            while (first == null) {
+                val candidate = try {
+                    server.accept()
+                } catch (e: SocketTimeoutException) {
+                    return@withContext SyncResult(
+                        SyncRole.GROUP_OWNER, 0, emptyList(), emptyMap(), emptyMap(), emptyMap(), emptyMap(), emptyMap(), null, "idle",
+                    )
+                }
+                when (val outcome = acceptFrame(candidate, ownerDeviceId)) {
+                    is AcceptOutcome.Hello -> {
+                        first = candidate
+                        rawSessions.add(outcome.session)
+                    }
+                    AcceptOutcome.Ping, AcceptOutcome.Failed -> {
+                        // answered (or logged) and closed inside acceptFrame; keep waiting for
+                        // the first real client without touching the window.
+                    }
+                }
             }
             sockets.add(first)
-            val rawSessions = mutableListOf<ClientSession>()
-            readClientSession(first)?.let { rawSessions.add(it) }
 
             val deadline = System.currentTimeMillis() + windowMs
             val previousTimeout = server.soTimeout
@@ -255,8 +269,15 @@ class FedAvgCoordinator(private val peer: FlPeer) {
                 while (System.currentTimeMillis() < deadline) {
                     try {
                         val next = server.accept()
-                        sockets.add(next)
-                        readClientSession(next)?.let { rawSessions.add(it) }
+                        when (val outcome = acceptFrame(next, ownerDeviceId)) {
+                            is AcceptOutcome.Hello -> {
+                                sockets.add(next)
+                                rawSessions.add(outcome.session)
+                            }
+                            AcceptOutcome.Ping, AcceptOutcome.Failed -> {
+                                // a PING mid-window: answered and closed already, not a client
+                            }
+                        }
                     } catch (e: SocketTimeoutException) {
                         // keep polling until the window elapses
                     }
@@ -545,12 +566,52 @@ class FedAvgCoordinator(private val peer: FlPeer) {
     private fun describe(e: Exception): String =
         "${e::class.simpleName ?: "error"}: ${e.message ?: "connection closed by peer"}"
 
-    /** Reads one client's HELLO + WEIGHTS... + optional SAMPLE_IDS + DONE; null (and logs) on any protocol error. */
-    private fun readClientSession(socket: Socket): ClientSession? = try {
-        val hello = SyncProtocol.read(socket.getInputStream())
+    private sealed interface AcceptOutcome {
+        data class Hello(val session: ClientSession) : AcceptOutcome
+        object Ping : AcceptOutcome
+        object Failed : AcceptOutcome
+    }
+
+    /**
+     * Reads the first frame off a freshly accepted socket (v13 plan §1). A PING is answered with
+     * PONG (carrying this owner's deviceId) and the socket closed immediately, before the merge
+     * window or client bookkeeping ever sees it. A HELLO is handed straight to
+     * [readClientSession] with this already-read frame, so the session reader doesn't re-read it.
+     * Anything else (or any IOException/timeout on this first read) is logged and dropped.
+     */
+    private fun acceptFrame(socket: Socket, ownerDeviceId: String): AcceptOutcome = try {
+        socket.soTimeout = PING_TIMEOUT_MS
+        val firstMsg = SyncProtocol.read(socket.getInputStream())
+        when (firstMsg.type) {
+            SyncProtocol.PING -> {
+                SyncProtocol.write(
+                    socket.getOutputStream(),
+                    SyncProtocol.Message(SyncProtocol.PONG, SyncProtocol.Header(deviceId = ownerDeviceId), null),
+                )
+                runCatching { socket.close() }
+                AcceptOutcome.Ping
+            }
+            SyncProtocol.HELLO -> {
+                socket.soTimeout = 0 // back to blocking for the rest of the session, as before
+                val session = readClientSession(socket, firstMsg)
+                if (session != null) AcceptOutcome.Hello(session) else AcceptOutcome.Failed
+            }
+            else -> {
+                Logx.w("fl sync: expected HELLO or PING, got type=${firstMsg.type}")
+                AcceptOutcome.Failed
+            }
+        }
+    } catch (e: IOException) {
+        Logx.w("fl sync: failed to read from a client", e)
+        AcceptOutcome.Failed
+    }
+
+    /** Reads one client's WEIGHTS... + optional SAMPLE_IDS + DONE, given its already-read HELLO
+     * ([acceptFrame]'s first frame); null (and logs) on any protocol error. */
+    private fun readClientSession(socket: Socket, hello: SyncProtocol.Message): ClientSession? = try {
         val deviceId = hello.header.deviceId
-        if (hello.type != SyncProtocol.HELLO || deviceId == null) {
-            Logx.w("fl sync: expected HELLO with a deviceId, got type=${hello.type}")
+        if (deviceId == null) {
+            Logx.w("fl sync: HELLO missing a deviceId")
             null
         } else {
             val name = hello.header.name ?: deviceId
@@ -589,5 +650,11 @@ class FedAvgCoordinator(private val peer: FlPeer) {
     } catch (e: IOException) {
         Logx.w("fl sync: failed to read from a client", e)
         null
+    }
+
+    companion object {
+        /** How long the accept path waits for a client's first frame (v13 plan §1); a real
+         * HELLO client sends it right after connecting, a PING probe even sooner. */
+        private const val PING_TIMEOUT_MS = 2000
     }
 }
