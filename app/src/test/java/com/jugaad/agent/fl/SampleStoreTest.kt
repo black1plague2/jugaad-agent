@@ -146,4 +146,45 @@ class SampleStoreTest {
         assertEquals(1, healthy.size)
         assertEquals("s1", healthy.single().id)
     }
+
+    @Test
+    fun removeForAssetRemovesOnlyThatAssetsSamples() {
+        val store = SampleStore(tmp.root)
+        store.addPending("s1", "assetA", sample(1))
+        store.addPending("s2", "assetA", sample(2))
+        store.addPending("s3", "assetB", sample(3))
+        store.label("s1", 0, SampleSource.HUMAN) // labelled
+        // s2 stays pending (unlabelled)
+
+        val removed = store.removeForAsset("assetA")
+
+        assertEquals(2, removed)
+        assertTrue(store.forAsset("assetA").isEmpty())
+        assertEquals(1, store.forAsset("assetB").size)
+    }
+
+    @Test
+    fun removeForAssetPersistsAcrossReopen() {
+        val store = SampleStore(tmp.root)
+        store.addPending("s1", "assetA", sample(1))
+        store.addPending("s2", "assetB", sample(2))
+        store.label("s1", 0, SampleSource.HUMAN)
+
+        store.removeForAsset("assetA")
+
+        val reopened = SampleStore(tmp.root)
+        assertTrue(reopened.forAsset("assetA").isEmpty())
+        assertEquals(1, reopened.forAsset("assetB").size)
+    }
+
+    @Test
+    fun removeForAssetUnknownIdReturnsZeroAndChangesNothing() {
+        val store = SampleStore(tmp.root)
+        store.addPending("s1", "assetA", sample(1))
+
+        val removed = store.removeForAsset("unknown")
+
+        assertEquals(0, removed)
+        assertEquals(1, store.forAsset("assetA").size)
+    }
 }

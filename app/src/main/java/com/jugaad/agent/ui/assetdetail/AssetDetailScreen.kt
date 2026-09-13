@@ -248,7 +248,12 @@ fun AssetDetailScreen(
                 AlertDialog(
                     onDismissRequest = { showDeleteConfirm = false },
                     title = { Text("Delete ${a.name}") },
-                    text = { Text("This removes ${a.name} and all of its measurement history. This cannot be undone.") },
+                    text = {
+                        Text(
+                            "This removes ${a.name}, its measurement history, and its training samples on this phone. " +
+                                "Samples already shared to other phones stay there. This cannot be undone.",
+                        )
+                    },
                     confirmButton = {
                         TextButton(onClick = { showDeleteConfirm = false; vm.deleteAsset(onDeleted) }) {
                             Text("Delete", color = FioriColors.Negative)
