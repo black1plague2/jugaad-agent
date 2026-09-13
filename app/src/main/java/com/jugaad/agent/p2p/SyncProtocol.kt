@@ -24,7 +24,9 @@ import java.nio.ByteOrder
  * the version number, message types and header shape changed for multi-variant FedAvg
  * plus champion/challenger network state. v4 adds SAMPLE_IDS/SAMPLES (peer dataset
  * enrichment, see [FlSampleWire]) within this same v2 framing; an older peer that
- * never sends them still completes a plain weights-only session.
+ * never sends them still completes a plain weights-only session. v13 adds PING/PONG (a bare
+ * liveness probe, see [com.jugaad.agent.p2p.OwnerProbe]): still this same v2 framing, answered
+ * by the owner's accept loop before any HELLO session starts and never counted as a client.
  */
 object SyncProtocol {
     const val VERSION = 2
@@ -36,6 +38,9 @@ object SyncProtocol {
     const val DONE = 6
     const val SAMPLE_IDS = 7
     const val SAMPLES = 8
+    /** v13: liveness probe. PING carries no fields; PONG carries the owner's deviceId. */
+    const val PING = 9
+    const val PONG = 10
 
     private val MAGIC = "JGFL".toByteArray(Charsets.US_ASCII)
     private val json = Json { ignoreUnknownKeys = true }

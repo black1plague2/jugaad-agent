@@ -22,10 +22,12 @@ class AutoJoinTest {
         lastRole: NodeRole = NodeRole.NONE,
         consecutiveSyncFailures: Int = 0,
         failoverAfterFailures: Int = 3,
+        liveOwnerIds: Set<String> = emptySet(),
+        lastAttemptFailed: Boolean = false,
     ) = AutoJoin.plan(
         enabled, serving, peers, lastOwnerAddress, lastHost, lastSyncAt, now, intervalMs = 60_000L,
         lastRole = lastRole, consecutiveSyncFailures = consecutiveSyncFailures,
-        failoverAfterFailures = failoverAfterFailures,
+        failoverAfterFailures = failoverAfterFailures, liveOwnerIds = liveOwnerIds, lastAttemptFailed = lastAttemptFailed,
     )
 
     @Test
@@ -70,16 +72,27 @@ class AutoJoinTest {
         assertTrue(plan(emptyList(), lastOwnerAddress = other.host, lastRole = NodeRole.NONE) is Step.Wait)
     }
 
+    // --- v13 plan §8 (H7): once SyncLastOwner already had its shot, retry a full failover
+    // attempt instead of waiting forever with no owner anywhere in the fleet ---
+
     @Test
-    fun noPeersPastFailoverThresholdDoesNothing() {
-        // Once SyncNow's failure streak reached the failover threshold, Failover already had
-        // its chance; AutoJoin should not keep hammering a owner it has given up on.
-        assertTrue(
+    fun noPeersPastFailoverThresholdTriesFailover() {
+        assertEquals(
+            Step.TryFailover(other.host),
             plan(
                 emptyList(), lastOwnerAddress = other.host, lastRole = NodeRole.CLIENT,
                 consecutiveSyncFailures = 3, failoverAfterFailures = 3,
-            ) is Step.Wait,
+            ),
         )
+    }
+
+    @Test
+    fun failoverRetryNotTriedMoreThanOncePerInterval() {
+        val step = plan(
+            emptyList(), lastOwnerAddress = other.host, lastRole = NodeRole.CLIENT,
+            consecutiveSyncFailures = 3, failoverAfterFailures = 3, lastSyncAt = 70_000L,
+        )
+        assertTrue(step is Step.Wait)
     }
 
     @Test
@@ -92,6 +105,59 @@ class AutoJoinTest {
     @Test
     fun onePeerPicksThatPeerEvenWithLastOwnerElsewhere() {
         assertEquals(Step.Sync(owner), plan(listOf(owner), lastOwnerAddress = other.host, lastRole = NodeRole.CLIENT))
+    }
+
+    // --- v13 plan §4: with several owners advertised, pick the lowest deviceId that answers ping ---
+
+    @Test
+    fun pickLowestLiveIdWhenSeveralOwnersAdvertised() {
+        // other.deviceId="219e" sorts below owner.deviceId="a2b6"; both answered ping.
+        assertEquals(
+            Step.Sync(other),
+            plan(listOf(owner, other), liveOwnerIds = setOf(owner.deviceId, other.deviceId)),
+        )
+    }
+
+    @Test
+    fun ignoresADeadOwnerEvenWithALowerId() {
+        // "219e" (other) is the lower id, but only owner ("a2b6") answered ping.
+        assertEquals(Step.Sync(owner), plan(listOf(owner, other), liveOwnerIds = setOf(owner.deviceId)))
+    }
+
+    @Test
+    fun fallsBackToLastOwnerWhenNobodyAnswersPing() {
+        assertEquals(Step.Sync(other), plan(listOf(owner, other), lastOwnerAddress = other.host, liveOwnerIds = emptySet()))
+    }
+
+    // --- v13 follow-up §2: a failed attempt retries after FAILED_RETRY_MS (15 s), not the full
+    // autoJoinIntervalMs (60 s); success goes back to the normal interval ---
+
+    @Test
+    fun failedAttemptRetriesSoonerThanNormalInterval() {
+        // 20 s since the last sync: too soon for the 60 s normal interval...
+        assertTrue(plan(listOf(owner), lastHost = owner.host, lastSyncAt = 80_000L) is Step.Wait)
+        // ...but past the 15 s failed-retry.
+        assertEquals(
+            Step.Sync(owner),
+            plan(listOf(owner), lastHost = owner.host, lastSyncAt = 80_000L, lastAttemptFailed = true),
+        )
+    }
+
+    @Test
+    fun tryFailoverAlsoRetriesAfterFailedRetryMsNotFullInterval() {
+        assertTrue(
+            plan(
+                emptyList(), lastOwnerAddress = other.host, lastRole = NodeRole.CLIENT,
+                consecutiveSyncFailures = 3, failoverAfterFailures = 3, lastSyncAt = 80_000L,
+            ) is Step.Wait,
+        )
+        assertEquals(
+            Step.TryFailover(other.host),
+            plan(
+                emptyList(), lastOwnerAddress = other.host, lastRole = NodeRole.CLIENT,
+                consecutiveSyncFailures = 3, failoverAfterFailures = 3, lastSyncAt = 80_000L, lastAttemptFailed = true,
+            ),
+        )
     }
 
     @Test

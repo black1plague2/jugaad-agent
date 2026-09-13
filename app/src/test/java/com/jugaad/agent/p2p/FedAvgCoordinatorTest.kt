@@ -6,7 +6,9 @@ import com.jugaad.agent.fl.NetworkState
 import com.jugaad.agent.fl.NodeConfig
 import com.jugaad.agent.fl.NodeMode
 import com.jugaad.agent.fl.VariantMetrics
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -534,6 +536,60 @@ class FedAvgCoordinatorTest {
                 "expected a schema-mismatch INFO event, got ${owner.events}",
                 owner.events.any { it.first == EventType.INFO && it.second.contains("schema mismatch") && it.second.contains("client01") },
             )
+        } finally {
+            server.close()
+        }
+    }
+
+    // --- v13 plan §1: PING/PONG liveness probe, answered before any merge window opens ---
+
+    @Test
+    fun pingIsAnsweredWithPongAndNeverOpensAMergeWindow() {
+        val server = ServerSocket(SyncProtocol.port())
+        server.soTimeout = 500
+        try {
+            val owner = FakeFlPeer("owner01", mode = NodeMode.STABLE)
+            owner.addVariant("base", floatArrayOf(1f, 1f), round = 1, nTrain = 10, nVal = 5, trainAcc = 0.9f, valAcc = 0.9f) { 0.9f }
+
+            val (result, pongDeviceId) = runBlocking {
+                val serverJob = async { FedAvgCoordinator(owner).serveOnce(server, windowMs = 300) }
+                val pingJob = async(Dispatchers.IO) { OwnerProbe.ping("127.0.0.1", SyncProtocol.port(), timeoutMs = 2000) }
+                val pong = pingJob.await()
+                // Nobody else connects; a PING must never start the merge window, so the accept
+                // loop should time out into "idle" once its own socket timeout elapses.
+                Pair(serverJob.await(), pong)
+            }
+
+            assertEquals("owner01", pongDeviceId)
+            assertEquals("idle", result.message)
+            assertEquals(0, result.peers)
+        } finally {
+            server.close()
+        }
+    }
+
+    @Test
+    fun pingDuringAnOpenWindowDoesNotCountAndAHelloSessionStillMerges() {
+        val server = ServerSocket(SyncProtocol.port())
+        try {
+            val owner = FakeFlPeer("owner01", mode = NodeMode.STABLE)
+            owner.addVariant("base", floatArrayOf(1f, 1f), round = 1, nTrain = 10, nVal = 5, trainAcc = 0.9f, valAcc = 0.9f) { 0.9f }
+            val client = FakeFlPeer("client01", mode = NodeMode.STABLE)
+            client.addVariant("base", floatArrayOf(3f, 3f), round = 1, nTrain = 10, nVal = 5, trainAcc = 0.9f, valAcc = 0.9f) { 0.9f }
+
+            val (result, pongDeviceId) = runBlocking {
+                val serverJob = async { FedAvgCoordinator(owner).serveOnce(server, windowMs = 800) }
+                val clientJob = async { FedAvgCoordinator(client).runAsClient("127.0.0.1") }
+                delay(200) // let the HELLO session open the window first
+                val pong = OwnerProbe.ping("127.0.0.1", SyncProtocol.port(), timeoutMs = 2000)
+                clientJob.await()
+                Pair(serverJob.await(), pong)
+            }
+
+            assertEquals("owner01", pongDeviceId)
+            // Exactly the HELLO client, not the PING, counted as a peer, and it still merged.
+            assertEquals(1, result.peers)
+            assertTrue("base should still merge: ${result.message}", result.accepted["base"] == true)
         } finally {
             server.close()
         }

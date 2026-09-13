@@ -164,11 +164,16 @@ class ServiceLocator private constructor(app: Context) {
                     val mlpIds = FlVariants.ALL.filter { it.kind == VariantKind.MLP }.map { it.id }
                     Logx.i("LiteRT heads loaded: ${mlpIds.joinToString(", ")}; strategies: ${runtime.trainers.keys.joinToString(", ")}")
 
-                    // Self-healing role restore (v4 §4): resume serving if this node was the
-                    // group owner before it last stopped (crash/reboot); a CLIENT does nothing
-                    // until the scheduler or the user syncs.
+                    // Self-healing role restore (v4 §4, extended by v13 §7): resume serving if
+                    // this node was the group owner before it last stopped (crash/reboot).
+                    // Otherwise, if auto-join is on, still bring the mesh service up in CLIENT
+                    // mode from this foreground app-launch path, so a later in-background
+                    // takeover (AutoJoin's failover retry) only ever needs an in-process mode
+                    // flip and never calls startForegroundService itself (H6).
                     if (nodeConfig.value.lastRole == NodeRole.OWNER) {
                         FlSyncService.start(appContext)
+                    } else if (ConfigStore.effective.value.sync.autoJoin) {
+                        FlSyncService.ensureClientRunning(appContext)
                     }
                 }.onFailure { t -> Logx.w("LiteRT heads failed to load — FL disabled this session", t) }
             }

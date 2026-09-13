@@ -36,11 +36,19 @@ object SyncNow {
         val coordinator = FedAvgCoordinator(RuntimePeer(flRuntime))
         val cfg = ConfigStore.effective.value
 
-        var result = coordinator.runAsClient(ownerAddress)
-        for (backoffMs in cfg.sync.retryBackoffMs) {
-            if (result.succeeded()) break
-            delay(backoffMs.toLong())
-            result = coordinator.runAsClient(ownerAddress)
+        // Ping before the first attempt and before each retry (v13 follow-up §1): a session
+        // against a dead/frozen owner otherwise burns connectTimeout+readTimeout on every one of
+        // retryBackoffMs's attempts (30 s+ apiece on-device), which is most of what made S4's
+        // recovery take 9 minutes. A ping that fails stops the whole call right here with one
+        // recorded failure rather than working through the remaining retries.
+        var result = pingThenRun(ownerAddress, coordinator)
+        if (!result.isPingFailure()) {
+            for (backoffMs in cfg.sync.retryBackoffMs) {
+                if (result.succeeded()) break
+                delay(backoffMs.toLong())
+                result = pingThenRun(ownerAddress, coordinator)
+                if (result.isPingFailure()) break
+            }
         }
 
         flRuntime.updateConfig { c -> nextConfig(c, ownerAddress, result) }
@@ -49,10 +57,38 @@ object SyncNow {
         if (!result.succeeded() &&
             Failover.shouldTakeOver(flRuntime.config.value, flRuntime.network.value, System.currentTimeMillis(), cfg)
         ) {
-            Failover.takeOver(context)
+            // The failure streak and node ordering say take over, but neither proves the current
+            // owner is actually dead (H1-H3 in the v13 plan): ping it and every other advertised
+            // owner first, and only take over if nobody answers.
+            when (val decision = probeBeforeTakeover(context, flRuntime)) {
+                Failover.TakeoverDecision.TakeOver -> Failover.takeOver(context)
+                is Failover.TakeoverDecision.StandDown -> {
+                    Logx.i("failover: owner ${decision.ownerId}/${decision.ownerHost} is alive, not taking over")
+                    flRuntime.updateConfig { c ->
+                        c.copy(lastRole = NodeRole.CLIENT, lastOwnerAddress = decision.ownerHost, consecutiveSyncFailures = 0)
+                    }
+                }
+            }
         }
 
         result
+    }
+
+    /** Pings [NodeConfig.lastOwnerAddress] and every other advertised owner (v13 plan §3),
+     * then hands the results to the pure [Failover.decideTakeover]. */
+    private suspend fun probeBeforeTakeover(context: Context, flRuntime: FlRuntime): Failover.TakeoverDecision {
+        val me = flRuntime.config.value
+        val lastOwnerHost = me.lastOwnerAddress
+        val lastOwnerAliveId = lastOwnerHost?.let { OwnerProbe.ping(it, SyncProtocol.port()) }
+
+        val lan = context.services().lanDiscovery
+        val others = lan.peers.value.filterNot { it.deviceId == me.deviceId }
+        val advertisedLive = mutableMapOf<String, String>()
+        for (p in others) {
+            OwnerProbe.ping(p.host, p.port)?.let { advertisedLive[p.host] = it }
+        }
+
+        return Failover.decideTakeover(lastOwnerHost, lastOwnerAliveId, advertisedLive)
     }
 
     /** WiFi Direct group owner if a group is formed, else the owner advertising on this WiFi
@@ -79,12 +115,34 @@ object SyncNow {
         lan.startDiscovery()
         val peers = (withTimeoutOrNull(LAN_SCAN_MS) { lan.peers.first { list -> list.any { it.deviceId != me } } }
             ?: lan.peers.value).filterNot { it.deviceId == me }
-        val pick = LanDiscovery.pickOwner(peers, flRuntime.config.value.lastOwnerAddress)
+        // Several owners advertised: ping each so the lowest-id one that actually answers wins,
+        // rather than trusting whichever mDNS record happened to resolve (v13 plan §4).
+        val liveOwnerIds: Set<String> = if (peers.size > 1) {
+            val ids = mutableSetOf<String>()
+            for (p in peers) {
+                if (OwnerProbe.ping(p.host, p.port) != null) ids.add(p.deviceId)
+            }
+            ids
+        } else {
+            emptySet()
+        }
+        val pick = LanDiscovery.pickOwner(peers, flRuntime.config.value.lastOwnerAddress, liveOwnerIds)
         Logx.i("fl sync: lan scan found ${peers.size} owner(s) ${peers.map { it.name }}, picked ${pick?.name}")
         return pick?.host
     }
 
     private const val LAN_SCAN_MS = 3000L
+
+    /** Pings [ownerAddress] first (v13 follow-up §1); only runs the real session if it answers.
+     * Logs and returns [pingFailedResult] otherwise, so the caller can tell a fail-fast result
+     * apart from an ordinary session failure via [isPingFailure]. */
+    private suspend fun pingThenRun(ownerAddress: String, coordinator: FedAvgCoordinator): SyncResult {
+        if (OwnerProbe.ping(ownerAddress, SyncProtocol.port()) == null) {
+            Logx.w("fl sync: owner $ownerAddress did not answer ping, failing fast")
+            return pingFailedResult(ownerAddress)
+        }
+        return coordinator.runAsClient(ownerAddress)
+    }
 
     /** Pure failure-count/reset transition, pulled out of [asClient] so it's unit-testable
      * without WiFi Direct or a real [com.jugaad.agent.fl.FlRuntime]. */
@@ -94,7 +152,21 @@ object SyncNow {
         } else {
             current.copy(consecutiveSyncFailures = current.consecutiveSyncFailures + 1)
         }
+
+    /** Pure failure-shaped result for the ping-fail-fast path (v13 follow-up §1), pulled out so
+     * it's unit-testable on its own: shaped exactly like [FedAvgCoordinator.runAsClient]'s own
+     * swallowed-exception failure so [succeeded] and [nextConfig] treat it identically to a real
+     * session failure. */
+    internal fun pingFailedResult(host: String): SyncResult = SyncResult(
+        role = SyncRole.CLIENT, peers = 1, variants = emptyList(), roundsBefore = emptyMap(), roundsAfter = emptyMap(),
+        accepted = emptyMap(), valBefore = emptyMap(), valAfter = emptyMap(), promoted = null,
+        message = "fl sync: client failed: owner $host did not answer ping",
+    )
 }
 
 /** A session that never threw; [FedAvgCoordinator.runAsClient] swallows failures into this message shape. */
 internal fun SyncResult.succeeded(): Boolean = !message.startsWith("fl sync: client failed")
+
+/** True for [SyncNow.pingFailedResult]'s shape specifically, so a caller retrying can tell "the
+ * owner didn't even answer a ping" apart from an ordinary failed session. */
+internal fun SyncResult.isPingFailure(): Boolean = message.contains("did not answer ping")

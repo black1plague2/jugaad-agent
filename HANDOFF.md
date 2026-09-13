@@ -91,7 +91,7 @@ binding contracts and each ends with a "Result" section of verified facts.
 1. `git pull`, then read `CONTEXT.md` (toolchain, phones, the two build traps, how to move the app
    to a phone from a different machine) and this file, then `FEDERATED.md`.
 2. Build: `export JAVA_HOME=<jdk17-or-21>; ./gradlew :app:assembleDebug :app:testDebugUnitTest`.
-   Expect **194/194**. Current APK sha256 prefix `22b407f044f01379`, installed on all three phones.
+   Expect **226/226**. Current APK sha256 prefix `8b16736736b1d236`, installed on all three phones.
 3. `adb connect` the phones (IPs below) and confirm the installed sha before changing anything.
 4. **The phones hold real, unreplaceable data. Do not wipe them.** Phone A carries the
    coffee-machine capture: 8 equipment with baselines and 8 readings on `iQOO coffee`. Back up with
@@ -101,11 +101,20 @@ binding contracts and each ends with a "Result" section of verified facts.
 
 ## What is actually true right now
 
+- **v13 robust handover (13 Sep, 09:01):** APK `8b16736736b1d236`, **226/226** JVM tests, on all
+  three phones; B owner, A and C clients. Owner loss is now detected by a PING/PONG probe, not by
+  mDNS or a failure count; the sync service runs on every phone and switches mode in-process (a
+  background takeover used to throw `ForegroundServiceStartNotAllowedException` and leave the fleet
+  ownerless). On the phones: owner killed, new owner in 58 s; owner frozen, new owner in 1 min 45 s
+  with no split; old owner back, one owner again in 30 s. Screens must stay on: the OS freezes the
+  app's cgroup when a screen sleeps, whatever the battery setting. A's iQOO coffee `asset.json` is
+  restored. See `plans/2026-09-13-v13-robust-owner-handover.md` and `tools/devtest14/REPORT.md`.
+
 - **Superseded by v12 (13 Sep, 06:05):** APK `aee266c8c5985245`, **207/207** JVM tests, on all three
   phones. B `I2501-a783` is now owner (automatic failover at 03:32), A and C clients. Split-brain
   step-down, last-owner fallback in auto-join and five UI fixes landed; see
-  `plans/2026-09-13-v12-e2e-verification.md` and `tools/devtest13/REPORT.md`. Open: A's
-  iQOO coffee `asset.json` must be restored from `JugaadAgent-backups/20260913/xA/`.
+  `plans/2026-09-13-v12-e2e-verification.md` and `tools/devtest13/REPORT.md`. A's iQOO coffee
+  `asset.json` was restored in v13.
 
 - 194 JVM tests green; v8, v10 and v11 fixes all verified on hardware.
 - Federated: C `I2501-fd22` owner, A `I2501-f0c7` and B `I2501-a783` clients, registry exactly 3
