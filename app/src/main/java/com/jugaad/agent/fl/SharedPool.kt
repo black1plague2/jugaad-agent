@@ -88,6 +88,22 @@ class SharedPool(dir: File, private val cfg: () -> AppConfig) {
         added
     }
 
+    /**
+     * Removes every pool sample carrying [assetId] — these are either this phone's own
+     * shared samples for that asset coming back over a sync, or otherwise colliding by
+     * assetId, so once the asset is deleted locally they should stop training this node
+     * too. Cross-phone retraction (telling peers to drop their copies) is out of scope
+     * here; see the call site in ServiceLocator for that note. @return how many were removed.
+     */
+    fun removeForAsset(assetId: String): Int = synchronized(lock) {
+        val toRemove = index.values.filter { it.assetId == assetId }.map { it.id }
+        if (toRemove.isEmpty()) return 0
+        toRemove.forEach { index.remove(it) }
+        rewriteFile()
+        _revision.value++
+        toRemove.size
+    }
+
     private fun evict() {
         val sharing = cfg().sharing
 

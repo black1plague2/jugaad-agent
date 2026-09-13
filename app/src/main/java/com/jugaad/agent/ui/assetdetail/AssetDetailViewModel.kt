@@ -135,7 +135,7 @@ class AssetDetailViewModel(
 
     fun deleteAsset(onDone: () -> Unit) {
         viewModelScope.launch {
-            services.assetRepository.deleteAsset(assetId)
+            services.deleteAssetAndSamples(assetId)
             onDone()
         }
     }

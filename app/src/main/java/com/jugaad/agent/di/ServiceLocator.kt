@@ -191,6 +191,25 @@ class ServiceLocator private constructor(app: Context) {
         }
     }
 
+    /**
+     * Deletes an asset and every training sample it produced on this phone, so a deleted
+     * piece of equipment stops training the local models (and, via a future sync, the
+     * fleet) the moment it's removed. Both AssetListViewModel.deleteAsset and
+     * AssetDetailViewModel.deleteAsset route through this single function so the two
+     * delete entry points cannot diverge. Safe to call before the FL runtime has warmed
+     * up — the asset is still deleted, just with 0/0 samples removed.
+     *
+     * Cross-phone retraction — telling peers to drop the samples this asset already
+     * shared into their pools — is out of scope; those copies remain on other nodes.
+     */
+    suspend fun deleteAssetAndSamples(assetId: String) {
+        val runtime = _flRuntime.value
+        val own = runtime?.store?.removeForAsset(assetId) ?: 0
+        val pooled = runtime?.pool?.removeForAsset(assetId) ?: 0
+        assetRepository.deleteAsset(assetId)
+        Logx.i("asset delete: removed $own own and $pooled pooled samples for $assetId")
+    }
+
     fun captureBaselineUseCase() = CaptureBaselineUseCase(
         coordinator = captureCoordinator,
         features = featureExtractor,

@@ -127,6 +127,24 @@ class SampleStore(dir: File) {
     /** All samples (any label state) for one asset. */
     fun forAsset(assetId: String): List<FlSample> = synchronized(lock) { index.values.filter { it.assetId == assetId } }
 
+    /**
+     * Removes every sample carrying [assetId] from the in-memory index and persists the
+     * result (same rewrite-and-atomic-rename path as [label]). Called when a piece of
+     * equipment is deleted so its training data does not linger and keep training the
+     * fleet after the asset itself is gone. @return how many rows were removed; 0 (and
+     * no write) for an unknown [assetId].
+     */
+    fun removeForAsset(assetId: String): Int {
+        synchronized(lock) {
+            val toRemove = index.values.filter { it.assetId == assetId }.map { it.id }
+            if (toRemove.isEmpty()) return 0
+            toRemove.forEach { index.remove(it) }
+            rewriteFile()
+            _revision.value++
+            return toRemove.size
+        }
+    }
+
     /** Healthy-labelled (class 0) samples for one asset — the pool [RefreshBaselineUseCase] draws from. */
     fun healthyForAsset(assetId: String): List<FlSample> = forAsset(assetId).filter { it.label == 0 }
 

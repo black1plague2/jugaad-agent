@@ -62,6 +62,6 @@ class AssetListViewModel(private val services: ServiceLocator) : ViewModel() {
     }
 
     fun deleteAsset(id: String) = viewModelScope.launch {
-        services.assetRepository.deleteAsset(id)
+        services.deleteAssetAndSamples(id)
     }
 }

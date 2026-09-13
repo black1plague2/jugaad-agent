@@ -15,8 +15,8 @@ class SharedPoolTest {
     @get:Rule
     val tmp = TemporaryFolder()
 
-    private fun sample(id: String, origin: String?, ts: Long) = FlSample(
-        id = id, assetId = "a1", x = FloatArray(FlConstants.INPUT_DIM), label = 0,
+    private fun sample(id: String, origin: String?, ts: Long, assetId: String = "a1") = FlSample(
+        id = id, assetId = assetId, x = FloatArray(FlConstants.INPUT_DIM), label = 0,
         source = SampleSource.HUMAN, ts = ts, score = null, abs = null, absSensors = null,
         origin = origin, machineTypeId = null,
     )
@@ -108,5 +108,47 @@ class SharedPoolTest {
         assertEquals("s1", loaded.id)
         assertEquals("peerA", loaded.origin)
         assertEquals(SampleSource.PEER, loaded.source)
+    }
+
+    @Test
+    fun removeForAssetRemovesOnlyThatAssetsSamples() {
+        val pool = SharedPool(tmp.newFolder(), cfg())
+        pool.addAll(
+            listOf(
+                sample("s1", "peerA", ts = 1L, assetId = "assetA"),
+                sample("s2", "peerA", ts = 2L, assetId = "assetB"),
+            ),
+        )
+
+        val removed = pool.removeForAsset("assetA")
+
+        assertEquals(1, removed)
+        assertEquals(setOf("s2"), pool.ids())
+    }
+
+    @Test
+    fun removeForAssetPersistsAcrossReopen() {
+        val dir = tmp.newFolder()
+        SharedPool(dir, cfg()).addAll(
+            listOf(
+                sample("s1", "peerA", ts = 1L, assetId = "assetA"),
+                sample("s2", "peerA", ts = 2L, assetId = "assetB"),
+            ),
+        )
+        SharedPool(dir, cfg()).removeForAsset("assetA")
+
+        val reopened = SharedPool(dir, cfg())
+        assertEquals(setOf("s2"), reopened.ids())
+    }
+
+    @Test
+    fun removeForAssetUnknownIdReturnsZeroAndChangesNothing() {
+        val pool = SharedPool(tmp.newFolder(), cfg())
+        pool.addAll(listOf(sample("s1", "peerA", ts = 1L, assetId = "assetA")))
+
+        val removed = pool.removeForAsset("unknown")
+
+        assertEquals(0, removed)
+        assertEquals(setOf("s1"), pool.ids())
     }
 }
