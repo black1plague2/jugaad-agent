@@ -137,3 +137,22 @@ v14 follow-up, verified on hardware the same morning: two owners healed by thems
 Stop on owner B at 10:50:01 persisted `lastRole CLIENT` and a 297 s opt-out, logged
 `failover: automatic takeover suppressed, opted out after manual stop` at 10:50:06, and B's 8988
 listener stayed at 0 for 180 s while A took over at 10:51:09 and B and C joined A as clients.
+
+## Result, training-data integrity (2026-09-13, 11:1x-11:3x phone clock)
+
+Read-only audit of all three phones' `samples.jsonl`, `shared_samples.jsonl`, metrics and
+`network.json`: **zero** samples from bench-flagged equipment in any store or pool; every phone
+training with held-out data for the first time (`nTrain 9, nVal 4, valAcc 0.750`, standings
+`netAcc 0.75` on base, small, deep, noise); every labelled sample still class 0.
+
+Defect found and fixed: deleting equipment removed only its folder, so its samples kept training
+and spreading. Asset `712b007c` (generic, recorded on C 09:48 to 09:58, then deleted) still had 26
+samples on C, 6 of them in A's and B's pools. Commit `34d6418` routes both delete buttons through
+`ServiceLocator.deleteAssetAndSamples`, which removes the samples from this phone's store and pool;
+the dialog now says shared copies on other phones stay. No startup cleanup: existing orphans such as
+`712b007c` are left for the founder to decide. APK `83e536ab38db075e`, 252/252 JVM tests, on A, B, C.
+
+Verified on phone A: a throwaway non-bench Very high item got a reference, then one reading added
+one unlabelled sample (samples 8 to 9; unlabelled samples are never shared). Deleting it through the
+dialog logged `asset delete: removed 1 own and 0 pooled samples for 25e6580c`, the folder was gone,
+samples returned to 8, equipment to 8, and neither B nor C held any reference to `25e6580c`.
