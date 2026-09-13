@@ -154,6 +154,13 @@ fun ChecklistScreen(
                 style = MaterialTheme.typography.bodyMedium,
             )
 
+            Text(
+                "Advisory only. Readings support a technician's decision; the app is not a protection function and never trips equipment. " +
+                    "Not for hazardous (explosive) areas: a consumer phone is not Ex rated.",
+                color = FioriColors.TextSecondary,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+
             SensorsSection(sensorRows, probing)
 
             Spacer(Modifier.height(24.dp))
