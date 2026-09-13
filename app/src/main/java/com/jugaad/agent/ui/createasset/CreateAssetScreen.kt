@@ -16,9 +16,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -105,8 +107,11 @@ fun CreateAssetScreen(
             return@Scaffold
         }
 
+        // Scrolls: with the Sensitivity options the form is taller than a phone screen, and a
+        // fixed Column pushed the bench switch and "Create equipment" off the bottom, so no
+        // equipment could be created at all.
         Column(
-            Modifier.fillMaxSize().padding(pad).padding(20.dp),
+            Modifier.fillMaxSize().padding(pad).verticalScroll(rememberScrollState()).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Text("New equipment", style = MaterialTheme.typography.headlineMedium, color = FioriColors.TextPrimary)
@@ -230,7 +235,9 @@ fun CreateAssetScreen(
 
             state.error?.let { Text(it, color = FioriColors.Negative) }
 
-            Box(Modifier.weight(1f))
+            // A weight(1f) spacer is meaningless inside a scrolling column; a fixed gap keeps the
+            // buttons visually separated from the form.
+            Spacer(Modifier.height(8.dp))
 
             PrimaryButton(
                 text = if (state.saving) "Creating" else "Create equipment",
