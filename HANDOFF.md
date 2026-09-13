@@ -101,6 +101,12 @@ binding contracts and each ends with a "Result" section of verified facts.
 
 ## What is actually true right now
 
+- **Superseded by v12 (13 Sep, 06:05):** APK `aee266c8c5985245`, **207/207** JVM tests, on all three
+  phones. B `I2501-a783` is now owner (automatic failover at 03:32), A and C clients. Split-brain
+  step-down, last-owner fallback in auto-join and five UI fixes landed; see
+  `plans/2026-09-13-v12-e2e-verification.md` and `tools/devtest13/REPORT.md`. Open: A's
+  iQOO coffee `asset.json` must be restored from `JugaadAgent-backups/20260913/xA/`.
+
 - 194 JVM tests green; v8, v10 and v11 fixes all verified on hardware.
 - Federated: C `I2501-fd22` owner, A `I2501-f0c7` and B `I2501-a783` clients, registry exactly 3
   nodes, zero-sample merges correctly skipped without advancing round counters.

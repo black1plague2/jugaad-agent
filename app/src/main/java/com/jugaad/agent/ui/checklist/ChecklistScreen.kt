@@ -73,6 +73,14 @@ fun ChecklistScreen(
         }
     }
 
+    // The reference measurement is a stored file, not a live probe like "resting still", so it
+    // does not need the technician to tap "Run checks" first: load it as soon as this screen
+    // opens, same as the sensor probe below. Previously this stayed "Pending" until that tap even
+    // for equipment with a baseline already on disk.
+    LaunchedEffect(assetId) {
+        hasBaseline = if (services.assetRepository.getBaseline(assetId) != null) Check.PASS else Check.FAIL
+    }
+
     // Sensors section: availability up front, measured rate after a 1 s probe run once on
     // entering this screen. The probe is a plain LaunchedEffect(Unit) coroutine, so leaving
     // the screen before it finishes cancels it and MotionCapture unregisters its listeners.

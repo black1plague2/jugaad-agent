@@ -49,6 +49,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.jugaad.agent.core.config.ConfigStore
 import com.jugaad.agent.core.config.MachineCatalog
+import com.jugaad.agent.domain.model.FaultClass
 import com.jugaad.agent.ui.common.MetricRow
 import com.jugaad.agent.ui.common.SectionCard
 import com.jugaad.agent.ui.common.StatusPill
@@ -216,7 +217,11 @@ fun AssetDetailScreen(
                     Text("Last measurement document", color = FioriColors.TextPrimary, fontWeight = FontWeight.SemiBold)
                     StatusPill(it.status)
                     MetricRow("Anomaly score", "%.2f".format(it.anomalyScore))
-                    it.faultClass?.let { fc -> MetricRow("Fault", fc.label) }
+                    // FaultClass.HEALTHY is classifier class 0, not a fault; do not present it
+                    // as a finding here (see ResultScreen and HistoryScreen for the same rule).
+                    it.faultClass
+                        ?.takeIf { fc -> fc != FaultClass.HEALTHY }
+                        ?.let { fc -> MetricRow("Fault", fc.label) }
                     if (it.advice.isNotBlank()) Text(it.advice, color = FioriColors.TextSecondary)
                 }
             }
@@ -225,7 +230,7 @@ fun AssetDetailScreen(
                 ThresholdCard(
                     t1 = a.thresholds.t1.toFloat(),
                     t2 = a.thresholds.t2.toFloat(),
-                    onChange = { t1, t2 -> vm.updateThresholds(t1.toDouble(), t2.toDouble()) },
+                    onSave = { t1, t2 -> vm.updateThresholds(t1.toDouble(), t2.toDouble()) },
                 )
                 CalibrateSection(vm, a.thresholds.t1, a.thresholds.t2)
             }
@@ -255,8 +260,9 @@ fun AssetDetailScreen(
 }
 
 @Composable
-private fun ThresholdCard(t1: Float, t2: Float, onChange: (Float, Float) -> Unit) {
+private fun ThresholdCard(t1: Float, t2: Float, onSave: (Float, Float) -> Unit) {
     var range by remember(t1, t2) { mutableStateOf(t1..t2) }
+    val dirty = range.start != t1 || range.endInclusive != t2
     SectionCard {
         Text("Calibration", color = FioriColors.TextPrimary, fontWeight = FontWeight.SemiBold)
         Text(
@@ -266,7 +272,6 @@ private fun ThresholdCard(t1: Float, t2: Float, onChange: (Float, Float) -> Unit
         RangeSlider(
             value = range,
             onValueChange = { range = it },
-            onValueChangeFinished = { onChange(range.start, range.endInclusive) },
             valueRange = 0.5f..8f,
             steps = 14,
         )
@@ -275,6 +280,27 @@ private fun ThresholdCard(t1: Float, t2: Float, onChange: (Float, Float) -> Unit
             color = FioriColors.TextSecondary,
             style = MaterialTheme.typography.bodyMedium,
         )
+        if (dirty) {
+            Text(
+                "Not saved yet. Save thresholds or discard to keep the stored values.",
+                color = FioriColors.TextSecondary,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            GhostButton(
+                text = "Discard",
+                onClick = { range = t1..t2 },
+                enabled = dirty,
+                modifier = Modifier.weight(1f),
+            )
+            PrimaryButton(
+                text = "Save thresholds",
+                onClick = { onSave(range.start, range.endInclusive) },
+                enabled = dirty,
+                modifier = Modifier.weight(1f),
+            )
+        }
     }
 }
 
@@ -291,6 +317,7 @@ private fun CalibrateSection(vm: AssetDetailViewModel, t1: Double, t2: Double) {
     }
     val record by vm.calibration.collectAsStateWithLifecycle()
     val busy by vm.calibrating.collectAsStateWithLifecycle()
+    val observedHealthy by vm.healthyCount.collectAsStateWithLifecycle()
     val canRefresh by vm.canRefresh.collectAsStateWithLifecycle()
     val refreshing by vm.refreshing.collectAsStateWithLifecycle()
     val cfg by ConfigStore.effective.collectAsStateWithLifecycle()
@@ -301,10 +328,19 @@ private fun CalibrateSection(vm: AssetDetailViewModel, t1: Double, t2: Double) {
 
     val r = record
     if (r == null) {
-        FioriEmptyState(
-            "No observed samples yet",
-            "Label captured measurements to calibrate thresholds from real data.",
-        )
+        if (observedHealthy <= 0) {
+            FioriEmptyState(
+                "No observed samples yet",
+                "Label captured measurements to calibrate thresholds from real data.",
+            )
+        } else {
+            FioriKeyValueRow("Healthy count", "$observedHealthy")
+            Text(
+                "$observedHealthy of ${cfg.calibration.minHealthy} labelled healthy readings needed to calibrate",
+                color = FioriColors.TextSecondary,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
     } else {
         FioriKeyValueRow("Method", r.method)
         FioriKeyValueRow("Median healthy", "%.3f".format(r.medianHealthy))
@@ -328,7 +364,7 @@ private fun CalibrateSection(vm: AssetDetailViewModel, t1: Double, t2: Double) {
     )
 
     Text(
-        "$canRefresh of $refreshMinHealthy healthy readings with full features",
+        "$canRefresh of $refreshMinHealthy healthy readings with full sensor features needed to refresh the reference measurement",
         color = FioriColors.TextSecondary,
         style = MaterialTheme.typography.bodyMedium,
     )

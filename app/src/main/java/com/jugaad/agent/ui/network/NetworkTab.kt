@@ -94,11 +94,7 @@ private fun MeshStatusCard(
     onOpenGroupSettings: () -> Unit,
     runWithWifiPermission: (() -> Unit) -> Unit,
 ) {
-    val (roleText, roleSemantic) = when {
-        ui.group.isGroupOwner -> "Owner" to Semantic.INFORMATIVE
-        ui.group.formed -> "Client" to Semantic.NEUTRAL
-        else -> "Not connected" to Semantic.NEUTRAL
-    }
+    val (roleText, roleSemantic) = meshRole(ui)
     val (statusText, statusSemantic) = syncStatus(ui)
     val online = ui.displayNodes.count { System.currentTimeMillis() - it.lastSeenMs < STALE_MS }
     val standings = ui.network?.standings ?: emptyMap()
@@ -114,7 +110,7 @@ private fun MeshStatusCard(
             StatusChip(text = statusText, semantic = statusSemantic)
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            MiniStatCard(label = "Owner address", value = ui.group.ownerAddress ?: "--", modifier = Modifier.weight(1f))
+            MiniStatCard(label = "Owner address", value = meshOwnerAddress(ui), modifier = Modifier.weight(1f))
             MiniStatCard(label = "Role", value = roleText, modifier = Modifier.weight(1f))
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {

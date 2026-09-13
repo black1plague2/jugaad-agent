@@ -24,6 +24,13 @@ class CalibrateUseCase(
 ) {
     private val json = Json { prettyPrint = true; encodeDefaults = true }
 
+    /** Count of this asset's own labelled-healthy samples with a usable score, regardless of
+     * whether that meets `calibration.minHealthy` yet. [observe] returns null below that
+     * threshold, which otherwise leaves callers unable to tell "zero samples" from "some
+     * samples, not enough to calibrate" - see [CalibrationRecord]'s UI consumer. */
+    suspend fun healthyCount(assetId: String): Int =
+        store.labelled().count { it.assetId == assetId && it.label == 0 && it.score != null }
+
     /** Computes the proposed calibration without writing anything, or null if not enough data yet. */
     suspend fun observe(assetId: String): CalibrationRecord? {
         val c = cfg().calibration
