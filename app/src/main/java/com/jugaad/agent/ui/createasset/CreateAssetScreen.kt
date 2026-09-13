@@ -10,6 +10,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,6 +29,7 @@ import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -49,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.jugaad.agent.domain.model.Sensitivity
 import com.jugaad.agent.ui.common.SectionCard
 import com.jugaad.agent.ui.common.fiori.FioriColors
 import com.jugaad.agent.ui.common.fiori.FioriObjectCell
@@ -186,6 +189,29 @@ fun CreateAssetScreen(
                         modifier = Modifier.fillMaxWidth(),
                         icon = Icons.Default.CameraAlt,
                     )
+                }
+            }
+
+            SectionCard {
+                Text("Sensitivity", color = FioriColors.TextPrimary, fontWeight = FontWeight.SemiBold)
+                Sensitivity.entries.forEach { option ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .selectable(
+                                selected = state.sensitivity == option,
+                                onClick = { vm.setSensitivity(option) },
+                            )
+                            .padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        RadioButton(selected = state.sensitivity == option, onClick = { vm.setSensitivity(option) })
+                        Column {
+                            Text(option.label, color = FioriColors.TextPrimary, fontWeight = FontWeight.SemiBold)
+                            Text(option.description, color = FioriColors.TextSecondary, style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
                 }
             }
 

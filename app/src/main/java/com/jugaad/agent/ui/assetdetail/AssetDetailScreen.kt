@@ -21,6 +21,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RangeSlider
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -50,6 +52,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.jugaad.agent.core.config.ConfigStore
 import com.jugaad.agent.core.config.MachineCatalog
 import com.jugaad.agent.domain.model.FaultClass
+import com.jugaad.agent.domain.model.Sensitivity
 import com.jugaad.agent.ui.common.MetricRow
 import com.jugaad.agent.ui.common.SectionCard
 import com.jugaad.agent.ui.common.StatusPill
@@ -226,6 +229,8 @@ fun AssetDetailScreen(
                 }
             }
 
+            SensitivityCard(current = a.sensitivity, onSelect = { vm.setSensitivity(it) })
+
             if (!a.benchTest) {
                 ThresholdCard(
                     t1 = a.thresholds.t1.toFloat(),
@@ -260,6 +265,29 @@ fun AssetDetailScreen(
 }
 
 @Composable
+private fun SensitivityCard(current: Sensitivity, onSelect: (Sensitivity) -> Unit) {
+    SectionCard {
+        Text("Sensitivity", color = FioriColors.TextPrimary, fontWeight = FontWeight.SemiBold)
+        Sensitivity.entries.forEach { option ->
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .selectable(selected = current == option, onClick = { onSelect(option) })
+                    .padding(vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                RadioButton(selected = current == option, onClick = { onSelect(option) })
+                Column {
+                    Text(option.label, color = FioriColors.TextPrimary, fontWeight = FontWeight.SemiBold)
+                    Text(option.description, color = FioriColors.TextSecondary, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun ThresholdCard(t1: Float, t2: Float, onSave: (Float, Float) -> Unit) {
     var range by remember(t1, t2) { mutableStateOf(t1..t2) }
     val dirty = range.start != t1 || range.endInclusive != t2
@@ -272,8 +300,9 @@ private fun ThresholdCard(t1: Float, t2: Float, onSave: (Float, Float) -> Unit) 
         RangeSlider(
             value = range,
             onValueChange = { range = it },
-            valueRange = 0.5f..8f,
-            steps = 14,
+            // Extends below 0.5 so a Very high (or calibrated) asset's thresholds are not clamped.
+            valueRange = 0.05f..8f,
+            steps = 158,
         )
         Text(
             "score up to T1 healthy, T1 to T2 warning, above T2 critical",

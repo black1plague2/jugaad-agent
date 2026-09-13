@@ -1,5 +1,6 @@
 package com.jugaad.agent.core.config
 
+import com.jugaad.agent.domain.model.Sensitivity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -23,13 +24,25 @@ class MachineCatalogTest {
     private val expectedIds = listOf(
         "coffee_vending", "desk_fan", "ceiling_fan", "exhaust_fan", "ac_outdoor_unit",
         "refrigerator_compressor", "water_pump", "washing_machine", "air_compressor",
-        "diesel_generator", "printer_3d", "server_rack_fan", "generic",
+        "diesel_generator", "printer_3d", "server_rack_fan", "small_light_object", "generic",
     )
 
     @Test
-    fun allThirteenTypesArePresent() {
-        assertEquals(13, types.size)
+    fun allFourteenTypesArePresent() {
+        assertEquals(14, types.size)
         assertEquals(expectedIds.toSet(), types.map { it.id }.toSet())
+    }
+
+    @Test
+    fun smallLightObjectResolvesToVeryHigh() {
+        val type = types.first { it.id == "small_light_object" }
+        assertEquals(Sensitivity.VERY_HIGH, type.resolvedSensitivity)
+    }
+
+    @Test
+    fun typeWithoutSensitivityFieldResolvesToStandard() {
+        val type = types.first { it.id == "generic" }
+        assertEquals(Sensitivity.STANDARD, type.resolvedSensitivity)
     }
 
     @Test

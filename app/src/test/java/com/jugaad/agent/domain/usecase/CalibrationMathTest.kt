@@ -86,4 +86,42 @@ class CalibrationMathTest {
     fun driftIsFalseWithNoRecentReadings() {
         assertFalse(CalibrationMath.driftDetected(emptyList(), t1 = 2.0, driftRatio = 0.5))
     }
+
+    /** v16: a High/Very-high asset scales k1, k2 and the MAD floor by its sensitivity factor `f`
+     *  so calibration keeps it tighter than Standard instead of snapping back. Median is chosen
+     *  as 0 and the healthy spread well above either floor so the k*mad term - the only term
+     *  affected by f - scales exactly linearly and isolates the scaling behaviour being tested. */
+    @Test
+    fun sensitivityFactorHalvesThresholdsOnIdenticalScores() {
+        val healthy = listOf(-1.0, -0.5, 0.0, 0.5, 1.0) // median 0.0, mad 0.5 (well above any floor here)
+        val f = 0.5
+
+        val standard = CalibrationMath.compute(
+            healthy, emptyList(), k1 = 3.0, k2 = 6.0, minHealthy = 5, madFloor = CalibrationMath.MAD_FLOOR,
+        )
+        val scaled = CalibrationMath.compute(
+            healthy, emptyList(), k1 = 3.0 * f, k2 = 6.0 * f, minHealthy = 5, madFloor = CalibrationMath.MAD_FLOOR * f,
+        )
+
+        assertNotNull(standard)
+        assertNotNull(scaled)
+        assertEquals(standard!!.t1 * f, scaled!!.t1, 1e-9)
+        assertEquals(standard.t2 * f, scaled.t2, 1e-9)
+    }
+
+    @Test
+    fun madFloorScalesWithSensitivityFactor() {
+        val identical = listOf(1.0, 1.0, 1.0, 1.0, 1.0) // mad = 0, always floored
+        val f = 0.5
+
+        val standard = CalibrationMath.compute(identical, emptyList(), k1 = 3.0, k2 = 6.0, minHealthy = 5)
+        val scaled = CalibrationMath.compute(
+            identical, emptyList(), k1 = 3.0, k2 = 6.0, minHealthy = 5, madFloor = CalibrationMath.MAD_FLOOR * f,
+        )
+
+        assertNotNull(standard)
+        assertNotNull(scaled)
+        assertEquals(CalibrationMath.MAD_FLOOR * f, scaled!!.madHealthy, 1e-9)
+        assertTrue("a smaller MAD floor should tighten t1", scaled.t1 < standard!!.t1)
+    }
 }

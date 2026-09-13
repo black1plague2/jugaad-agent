@@ -7,6 +7,7 @@ import com.jugaad.agent.domain.model.FaultClass
 import com.jugaad.agent.domain.model.InferenceBackend
 import com.jugaad.agent.domain.model.IssueSuggestion
 import com.jugaad.agent.domain.model.MachineStatus
+import com.jugaad.agent.domain.model.Sensitivity
 import com.jugaad.agent.ml.anomaly.Thresholds
 import kotlinx.serialization.Serializable
 
@@ -27,6 +28,9 @@ data class AssetDto(
     val t2: Double = Thresholds.DEFAULT.t2,
     val machineTypeId: String = "generic",
     val benchTest: Boolean = false,
+    /** Absent on any asset.json written before v16: decodes to [Sensitivity.STANDARD], leaving
+     *  the asset's already-persisted t1/t2 completely untouched (see AssetDtoTest). */
+    val sensitivity: String = Sensitivity.DEFAULT.name,
 ) {
     fun toDomain() = Asset(
         id = id,
@@ -37,6 +41,7 @@ data class AssetDto(
         thresholds = Thresholds.safe(t1, t2),
         machineTypeId = machineTypeId,
         benchTest = benchTest,
+        sensitivity = Sensitivity.fromName(sensitivity),
     )
 
     companion object {
@@ -50,6 +55,7 @@ data class AssetDto(
             t2 = a.thresholds.t2,
             machineTypeId = a.machineTypeId,
             benchTest = a.benchTest,
+            sensitivity = a.sensitivity.name,
         )
     }
 }

@@ -6,6 +6,7 @@ import com.jugaad.agent.core.Constants
 import com.jugaad.agent.core.Logx
 import com.jugaad.agent.core.Outcome
 import com.jugaad.agent.domain.model.Baseline
+import com.jugaad.agent.domain.model.Sensitivity
 import com.jugaad.agent.domain.repository.AssetRepository
 import com.jugaad.agent.ml.FeatureExtractor
 import com.jugaad.agent.ml.anomaly.AnomalyScorer
@@ -59,7 +60,9 @@ class CaptureBaselineUseCase(
             }
         }
 
-        val stats = scorer.buildBaseline(featureVectors)
+        val sensitivity = assets.getAsset(assetId)?.sensitivity ?: Sensitivity.DEFAULT
+        val floor = AnomalyScorer.SPREAD_FLOOR_BASE * sensitivity.factor
+        val stats = scorer.buildBaseline(featureVectors, floor)
         val baseline = Baseline(
             assetId = assetId,
             capturedAtMs = System.currentTimeMillis(),

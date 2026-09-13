@@ -14,4 +14,6 @@ data class Asset(
     val machineTypeId: String = "generic",
     /** Bench/test equipment: readings must never enter FL training, the peer sample pool, or calibration. */
     val benchTest: Boolean = false,
+    /** Scales default thresholds, score floors and calibration multipliers for this asset. */
+    val sensitivity: Sensitivity = Sensitivity.DEFAULT,
 )

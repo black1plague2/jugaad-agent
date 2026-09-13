@@ -34,12 +34,15 @@ class CalibrateUseCase(
     /** Computes the proposed calibration without writing anything, or null if not enough data yet. */
     suspend fun observe(assetId: String): CalibrationRecord? {
         val c = cfg().calibration
+        val f = (assets.getAsset(assetId)?.sensitivity ?: com.jugaad.agent.domain.model.Sensitivity.DEFAULT).factor
         val samples = store.labelled().filter { it.assetId == assetId }
         val healthySamples = samples.filter { it.label == 0 }
         val healthy = healthySamples.mapNotNull { it.score }
         val faulty = samples.filter { it.label == 1 || it.label == 2 }.mapNotNull { it.score }
 
-        val stats = CalibrationMath.compute(healthy, faulty, c.k1, c.k2, c.minHealthy) ?: return null
+        val stats = CalibrationMath.compute(
+            healthy, faulty, c.k1 * f, c.k2 * f, c.minHealthy, CalibrationMath.MAD_FLOOR * f,
+        ) ?: return null
 
         val recentHealthy = healthySamples.sortedByDescending { it.ts }.take(c.driftWindow).mapNotNull { it.score }
         val drift = CalibrationMath.driftDetected(recentHealthy, stats.t1, c.driftRatio)
@@ -133,11 +136,12 @@ object CalibrationMath {
         k1: Double,
         k2: Double,
         minHealthy: Int,
+        madFloor: Double = MAD_FLOOR,
     ): Stats? {
         if (healthyScores.size < minHealthy) return null
 
         val median = median(healthyScores)
-        val mad = median(healthyScores.map { kotlin.math.abs(it - median) }).coerceAtLeast(MAD_FLOOR)
+        val mad = median(healthyScores.map { kotlin.math.abs(it - median) }).coerceAtLeast(madFloor)
         var t1 = median + k1 * mad
         var t2 = median + k2 * mad
 
