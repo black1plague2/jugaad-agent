@@ -57,7 +57,7 @@ class DiagnoseUseCase(
         val asset = assets.getAsset(assetId)
             ?: return Outcome.Err("Asset $assetId not found")
         val baseline = assets.getBaseline(assetId)
-            ?: return Outcome.Err("No baseline yet — capture a baseline first")
+            ?: return Outcome.Err("No baseline yet. Capture a baseline first")
 
         val cap = when (val c = coordinator.capture()) {
             is Outcome.Err -> return c

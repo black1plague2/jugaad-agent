@@ -34,6 +34,10 @@ class AssetDetailViewModel(
     val calibration = MutableStateFlow<CalibrationRecord?>(null)
     val calibrating = MutableStateFlow(false)
     val calibrateMessage = MutableStateFlow<String?>(null)
+    // This asset's own labelled-healthy sample count, kept even when it is below
+    // calibration.minHealthy and calibration.value is therefore still null - lets the UI tell
+    // "zero samples" apart from "some samples, not enough yet".
+    val healthyCount = MutableStateFlow(0)
     val canRefresh = MutableStateFlow(0)
     val refreshing = MutableStateFlow(false)
     val calibrationAvailable: Boolean get() = services.flRuntime.value?.store != null
@@ -53,7 +57,9 @@ class AssetDetailViewModel(
 
     fun refreshCalibration() {
         viewModelScope.launch {
-            calibration.value = services.calibrateUseCase()?.observe(assetId)
+            val useCase = services.calibrateUseCase()
+            calibration.value = useCase?.observe(assetId)
+            healthyCount.value = useCase?.healthyCount(assetId) ?: 0
         }
     }
 
@@ -71,6 +77,7 @@ class AssetDetailViewModel(
             when (val outcome = useCase.apply(assetId)) {
                 is Outcome.Ok -> {
                     calibration.value = outcome.value
+                    healthyCount.value = outcome.value.nHealthy
                     calibrateMessage.value = "Thresholds updated: T1 %.1f, T2 %.1f".format(outcome.value.t1, outcome.value.t2)
                 }
                 is Outcome.Err -> calibrateMessage.value = "Calibration failed: ${outcome.message}"

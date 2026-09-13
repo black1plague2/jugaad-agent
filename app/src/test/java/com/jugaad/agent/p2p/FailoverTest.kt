@@ -115,4 +115,21 @@ class FailoverTest {
         assertEquals(NodeRole.CLIENT, updated.lastRole)
         assertEquals("192.168.49.1", updated.lastOwnerAddress)
     }
+
+    // --- Failover.shouldStepDown (two simultaneous owners resolve to the lower deviceId) ---
+
+    @Test
+    fun stepsDownToLowerIdPeer() {
+        assertTrue(Failover.shouldStepDown("fd22b465", listOf("a7830d3e")))
+    }
+
+    @Test
+    fun doesNotStepDownForHigherIdPeerOnly() {
+        assertFalse(Failover.shouldStepDown("a7830d3e", listOf("fd22b465")))
+    }
+
+    @Test
+    fun doesNotStepDownWithNoOtherOwners() {
+        assertFalse(Failover.shouldStepDown("a7830d3e", emptyList()))
+    }
 }

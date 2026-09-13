@@ -16,6 +16,7 @@ import androidx.core.content.ContextCompat
 import com.jugaad.agent.R
 import com.jugaad.agent.core.Logx
 import com.jugaad.agent.core.config.ConfigStore
+import com.jugaad.agent.fl.FlRuntime
 import com.jugaad.agent.fl.NodeRole
 import com.jugaad.agent.ui.services
 import kotlinx.coroutines.CoroutineScope
@@ -42,6 +43,8 @@ class FlSyncService : Service() {
     private var wifiManager: WifiDirectManager? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var wifiLock: WifiManager.WifiLock? = null
+    private var lastStepDownCheckMs = 0L
+    private var pendingStepDownId: String? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -84,6 +87,7 @@ class FlSyncService : Service() {
             }
 
             val coordinator = FedAvgCoordinator(RuntimePeer(flRuntime))
+            val lan = applicationContext.services().lanDiscovery
 
             while (isActive) {
                 val result = coordinator.serveOnce(socket)
@@ -93,6 +97,7 @@ class FlSyncService : Service() {
                         flRuntime.updateConfig { it.copy(lastRole = NodeRole.OWNER) }
                     }
                 }
+                if (checkStepDown(flRuntime, lan)) break
             }
         }
 
@@ -123,6 +128,37 @@ class FlSyncService : Service() {
             stopSelf()
             null
         }
+    }
+
+    /**
+     * Owner-side flap guard around [Failover.shouldStepDown]: only currently advertised owners
+     * are candidates (nobody but an owner calls [LanDiscovery.advertise]), and a candidate must
+     * show up on two checks [com.jugaad.agent.core.config.Sync.autoJoinIntervalMs] apart before
+     * this phone yields to it, so one stray or late mDNS resolve doesn't flip ownership back and
+     * forth. Persists CLIENT and the winner's address, then tears down via [stopSelf] (the
+     * existing [onDestroy] path: server close, WiFi Direct teardown, unadvertise, locks); the
+     * caller breaks its loop immediately after. Returns whether it yielded.
+     */
+    private fun checkStepDown(flRuntime: FlRuntime, lan: LanDiscovery): Boolean {
+        val now = System.currentTimeMillis()
+        val intervalMs = ConfigStore.effective.value.sync.autoJoinIntervalMs.toLong()
+        if (now - lastStepDownCheckMs < intervalMs) return false
+        lastStepDownCheckMs = now
+
+        val myId = flRuntime.config.value.deviceId
+        val others = lan.peers.value.filterNot { it.deviceId == myId }
+        val candidate = others.filter { it.deviceId < myId }.minByOrNull { it.deviceId }
+
+        if (candidate == null || candidate.deviceId != pendingStepDownId) {
+            pendingStepDownId = candidate?.deviceId
+            return false
+        }
+        if (!Failover.shouldStepDown(myId, others.map { it.deviceId })) return false
+
+        Logx.i("owner: yielding to ${candidate.name}, lower id")
+        flRuntime.updateConfig { it.copy(lastRole = NodeRole.CLIENT, lastOwnerAddress = candidate.host) }
+        stopSelf()
+        return true
     }
 
     override fun onDestroy() {

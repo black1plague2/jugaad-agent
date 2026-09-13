@@ -32,6 +32,33 @@ internal fun valAccTransition(before: Float, after: Float): String =
 
 internal fun modeLabel(mode: NodeMode): String = mode.name.lowercase().replaceFirstChar { it.uppercase() }
 
+/** Network tab's "Role" stat. Reads [NetworkUiState.serving] and [NodeConfig.lastRole], the same
+ * source [syncStatus] already uses, rather than [WifiDirectManager.GroupInfo.isGroupOwner]: a
+ * stale self-owned WiFi Direct group left at the OS level can report this device as group owner
+ * while it is actually a synced client, same staleness [ownerUnreachableMessage]'s caller already
+ * routes around. */
+internal fun meshRole(ui: NetworkUiState): Pair<String, Semantic> = when {
+    ui.serving -> "Owner" to Semantic.INFORMATIVE
+    ui.config?.lastRole == NodeRole.CLIENT -> "Client" to Semantic.NEUTRAL
+    ui.config?.lastRole == NodeRole.OWNER -> "Owner" to Semantic.INFORMATIVE
+    ui.group.formed -> "Client" to Semantic.NEUTRAL
+    else -> "Not connected" to Semantic.NEUTRAL
+}
+
+/** Network tab's "Owner address" stat. While serving, this phone is the owner. Otherwise the LAN
+ * owner actually in use: [NodeConfig.lastOwnerAddress] (the node this phone last synced to, kept
+ * current by [com.jugaad.agent.p2p.SyncNow] and [com.jugaad.agent.p2p.FlSyncService]), falling
+ * back to a discovered LAN owner, and only to the WiFi Direct group address when that group is
+ * the transport actually in use (formed and not a stale leftover, i.e. this phone did not just
+ * take the "Client" branch above from [NodeConfig.lastRole]). */
+internal fun meshOwnerAddress(ui: NetworkUiState): String = when {
+    ui.serving -> "This device"
+    ui.config?.lastOwnerAddress != null -> ui.config.lastOwnerAddress
+    ui.lanPeers.isNotEmpty() -> ui.lanPeers.first().host
+    ui.config?.lastRole != NodeRole.CLIENT && ui.group.formed && ui.group.ownerAddress != null -> ui.group.ownerAddress
+    else -> "--"
+}
+
 /** Devices/Network tabs' "owner unreachable" banner text (v4 plan §4: failed client syncs). */
 internal fun ownerUnreachableMessage(consecutiveSyncFailures: Int): String =
     "Owner unreachable ($consecutiveSyncFailures failed syncs): Discover and Connect to another node, or promote this node in Group settings"

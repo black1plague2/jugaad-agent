@@ -6,6 +6,7 @@ import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.Typeface
 import com.jugaad.agent.domain.model.Diagnosis
+import com.jugaad.agent.domain.model.FaultClass
 import com.jugaad.agent.domain.model.MachineStatus
 import java.io.File
 import java.text.SimpleDateFormat
@@ -45,7 +46,7 @@ object ReportRenderer {
         }
 
         var y = pad + 40f
-        c.drawText("Jugaad Agent — Report", pad, y, title)
+        c.drawText("Jugaad Agent Report", pad, y, title)
         y += 46f
         c.drawText(assetName, pad, y, label)
         y += 30f
@@ -71,7 +72,7 @@ object ReportRenderer {
         c.drawText("Anomaly score", pad, y, label)
         c.drawText("%.2f".format(diagnosis.anomalyScore), w - pad - big.measureText("%.2f".format(diagnosis.anomalyScore)), y, big)
         y += 60f
-        diagnosis.faultClass?.let {
+        diagnosis.faultClass?.takeIf { it != FaultClass.HEALTHY }?.let {
             c.drawText("Likely fault", pad, y, label)
             c.drawText(it.label, w - pad - body.measureText(it.label), y, body)
             y += 60f
@@ -118,7 +119,7 @@ object ReportRenderer {
     }
 
     private fun wrap(text: String, paint: Paint, maxWidth: Float): List<String> {
-        if (text.isBlank()) return listOf("—")
+        if (text.isBlank()) return listOf("--")
         val words = text.split(" ")
         val lines = ArrayList<String>()
         var cur = StringBuilder()

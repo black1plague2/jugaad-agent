@@ -39,6 +39,17 @@ object Failover {
         return candidateIds.min() == config.deviceId
     }
 
+    /**
+     * Pure decision for an owner already serving ([FlSyncService]'s loop): every phone that is
+     * itself an owner advertises on [LanDiscovery] (only [FlSyncService.onStartCommand] calls
+     * `advertise`), so [otherAdvertisedOwners] is exactly the set of other currently-serving
+     * owners' deviceIds this scan found. The lowest deviceId across that set and [myId] keeps
+     * serving, the same rule [shouldTakeOver] uses, so every phone evaluating it independently
+     * converges on one survivor without a round of messages.
+     */
+    fun shouldStepDown(myId: String, otherAdvertisedOwners: Collection<String>): Boolean =
+        otherAdvertisedOwners.any { it < myId }
+
     suspend fun takeOver(context: Context): Boolean {
         val flRuntime = context.services().flRuntime.value
         if (flRuntime == null) {
