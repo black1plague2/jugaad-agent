@@ -7,6 +7,7 @@ import com.jugaad.agent.di.ServiceLocator
 import com.jugaad.agent.domain.model.Asset
 import com.jugaad.agent.domain.model.Baseline
 import com.jugaad.agent.domain.model.Diagnosis
+import com.jugaad.agent.domain.model.Sensitivity
 import com.jugaad.agent.domain.usecase.CalibrationRecord
 import com.jugaad.agent.ml.anomaly.Thresholds
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -118,6 +119,17 @@ class AssetDetailViewModel(
     fun setBenchTest(v: Boolean) {
         viewModelScope.launch {
             asset.value?.let { services.assetRepository.updateAsset(it.copy(benchTest = v)) }
+        }
+    }
+
+    /** Changing sensitivity rescales this asset's thresholds to the new profile's default. */
+    fun setSensitivity(v: Sensitivity) {
+        viewModelScope.launch {
+            asset.value?.let {
+                services.assetRepository.updateAsset(
+                    it.copy(sensitivity = v, thresholds = Thresholds.forSensitivity(v)),
+                )
+            }
         }
     }
 

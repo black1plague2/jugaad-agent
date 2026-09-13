@@ -730,6 +730,62 @@
       ]
     },
     {
+      "id": "small_light_object",
+      "label": "Small or light object",
+      "keywords": ["box", "small device", "small enclosure", "package"],
+      "expectedRotationHz": [0, 60],
+      "notes": "box, package, small device or light enclosure",
+      "sensitivity": "VERY_HIGH",
+      "faults": [
+        {
+          "id": "imbalance_or_loose_mounting",
+          "label": "Imbalance or loose mounting",
+          "keywords": ["vibration", "rattle", "wobble", "imbalance", "loose", "mounting", "foundation"],
+          "evidence": [
+            {"metric": "lowBandDelta", "op": ">", "value": 0.4, "weight": 0.9},
+            {"metric": "imuDelta", "op": ">", "value": 0.12, "weight": 1.0},
+            {"metric": "cnnClass", "op": "==", "value": 1, "weight": 0.6}
+          ],
+          "action": "Check for loose mounting hardware and rotating-part imbalance.",
+          "severity": "WARNING"
+        },
+        {
+          "id": "airflow_obstruction",
+          "label": "Airflow obstruction or clogging",
+          "keywords": ["clogged", "obstruction", "dust", "blocked", "weak airflow"],
+          "evidence": [
+            {"metric": "broadbandDelta", "op": ">", "value": 0.4, "weight": 0.8},
+            {"metric": "cnnClass", "op": "==", "value": 2, "weight": 0.8},
+            {"metric": "highBandDelta", "op": ">", "value": 0.3, "weight": 0.4}
+          ],
+          "action": "Clear vents, filters, or ducts of obstruction and clean the unit.",
+          "severity": "WARNING"
+        },
+        {
+          "id": "bearing_wear",
+          "label": "Bearing wear",
+          "keywords": ["whine", "squeal", "grinding", "bearing", "knocking"],
+          "evidence": [
+            {"metric": "veryHighBandDelta", "op": ">", "value": 0.6, "weight": 1.0},
+            {"metric": "peakiness", "op": ">", "value": 0.5, "weight": 0.7}
+          ],
+          "action": "Inspect and lubricate or replace the worn bearing.",
+          "severity": "CRITICAL"
+        },
+        {
+          "id": "electrical_hum",
+          "label": "Electrical fault (winding / capacitor hum)",
+          "keywords": ["hum", "buzzing", "surge", "capacitor", "winding", "electrical noise"],
+          "evidence": [
+            {"metric": "lineHumDelta", "op": ">", "value": 0.2, "weight": 0.9},
+            {"metric": "magDelta", "op": ">", "value": 0.1, "weight": 0.7}
+          ],
+          "action": "Have the motor windings, capacitor, and electrical connections tested.",
+          "severity": "WARNING"
+        }
+      ]
+    },
+    {
       "id": "generic",
       "label": "Other rotating machine",
       "keywords": [],

@@ -5,6 +5,7 @@ import com.jugaad.agent.core.Logx
 import com.jugaad.agent.core.Outcome
 import com.jugaad.agent.core.config.AppConfig
 import com.jugaad.agent.domain.model.Baseline
+import com.jugaad.agent.domain.model.Sensitivity
 import com.jugaad.agent.domain.repository.AssetRepository
 import com.jugaad.agent.fl.FlSample
 import com.jugaad.agent.fl.SampleStore
@@ -39,7 +40,8 @@ class RefreshBaselineUseCase(
             )
         }
 
-        val floor = cfg().thresholds.spreadFloor
+        val sensitivity = assets.getAsset(assetId)?.sensitivity ?: Sensitivity.DEFAULT
+        val floor = cfg().thresholds.spreadFloor * sensitivity.factor
         val absFeatures = eligible.map { it.abs!! }
         val stats = scorer.buildBaseline(absFeatures, floor)
         val rawStd = maxOf(stats.rawStd, floor)

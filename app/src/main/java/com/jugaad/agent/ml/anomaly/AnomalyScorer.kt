@@ -29,7 +29,7 @@ class AnomalyScorer(
     ),
 ) {
     /** Noise floor for the healthy-cluster radius (~2 % cosine distance). */
-    private val spreadFloor = 0.02
+    private val spreadFloor = SPREAD_FLOOR_BASE
 
     data class BaselineStats(
         val mean: FloatArray,
@@ -176,5 +176,10 @@ class AnomalyScorer(
         /** Sensor order shared by [BaselineStats]'s std fields, [score]'s sensorDeltas and cfg.sensors.zWeights. */
         private val SENSOR_NAMES = arrayOf("accel", "gyro", "mag", "magRms")
         private val ZERO_SENSOR_DELTAS = DoubleArray(SENSOR_NAMES.size)
+
+        /** Base (Standard-sensitivity) noise floor for the healthy-cluster radius, before a
+         *  per-asset [com.jugaad.agent.domain.model.Sensitivity.factor] is applied by the caller
+         *  that knows the asset (see CaptureBaselineUseCase / RefreshBaselineUseCase). */
+        const val SPREAD_FLOOR_BASE = 0.02
     }
 }

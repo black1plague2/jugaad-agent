@@ -2,6 +2,7 @@ package com.jugaad.agent.core.config
 
 import android.content.Context
 import com.jugaad.agent.core.Logx
+import com.jugaad.agent.domain.model.Sensitivity
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -31,7 +32,13 @@ data class MachineType(
     val expectedRotationHz: List<Double> = emptyList(),
     val notes: String = "",
     val faults: List<FaultRule> = emptyList(),
-)
+    /** Optional profile name ("STANDARD"/"HIGH"/"VERY_HIGH"); absent means Standard.
+     *  Resolve with [resolvedSensitivity] rather than reading this raw. */
+    val sensitivity: String? = null,
+) {
+    /** This type's default [Sensitivity], falling back to [Sensitivity.DEFAULT] when unset or unknown. */
+    val resolvedSensitivity: Sensitivity get() = Sensitivity.fromName(sensitivity)
+}
 
 @Serializable
 private data class MachineCatalogFile(
